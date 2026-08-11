@@ -55,9 +55,14 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         const val POPUP_DELAY = 260L
         const val ANIMATION_DELAY = 550L
         const val VERIFY_DELAY = 500L
+        const val ENVIRONMENT_CHANGE_DELAY = 250L
+        const val STAGE_GAP = 8
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private val environmentChangedRunnable = Runnable {
+        if (!operationRunning) listener?.onEnvironmentChanged()
+    }
     private var operationRunning = false
 
     override fun onServiceConnected() {
@@ -67,15 +72,18 @@ class ImmersiaAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         operationRunning = false
+        handler.removeCallbacksAndMessages(null)
         if (instance === this) instance = null
         super.onDestroy()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (operationRunning) return
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
             event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {
-            listener?.onEnvironmentChanged()
+            handler.removeCallbacks(environmentChangedRunnable)
+            handler.postDelayed(environmentChangedRunnable, ENVIRONMENT_CHANGE_DELAY)
         }
     }
 
@@ -324,6 +332,38 @@ class ImmersiaAccessibilityService : AccessibilityService() {
                 if (topBottom || leftRight) return listOf(first, second)
             }
         }
+        val divider = findSplitDividerBounds() ?: return null
+        val display = currentDisplayBounds() ?: return null
+        val horizontal = divider.width() > divider.height()
+        val boundary = if (horizontal) divider.centerY() else divider.centerX()
+        val normalized = panes.map { pane ->
+            if (horizontal) {
+                val isTop = pane.bounds.centerY() < boundary
+                Pane(
+                    pane.packageName,
+                    if (isTop) {
+                        Rect(display.left, display.top, display.right, boundary - STAGE_GAP)
+                    } else {
+                        Rect(display.left, boundary + STAGE_GAP, display.right, display.bottom)
+                    },
+                )
+            } else {
+                val isLeft = pane.bounds.centerX() < boundary
+                Pane(
+                    pane.packageName,
+                    if (isLeft) {
+                        Rect(display.left, display.top, boundary - STAGE_GAP, display.bottom)
+                    } else {
+                        Rect(boundary + STAGE_GAP, display.top, display.right, display.bottom)
+                    },
+                )
+            }
+        }.distinctBy { it.packageName }
+        if (normalized.size >= 2 && normalized.any { it.packageName == packageName }) {
+            return normalized
+                .filter { it.packageName == packageName || it.packageName != packageName }
+                .take(2)
+        }
         return null
     }
 
@@ -334,7 +374,10 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         val appPackage = root.packageName?.toString() ?: return@mapNotNull null
         if (rect.width() < MIN_PANE_SIZE || rect.height() < MIN_PANE_SIZE) return@mapNotNull null
         Pane(appPackage, rect)
-    }.distinctBy { "${it.packageName}:${it.bounds.toShortString()}" }
+    }.groupBy { it.packageName }
+        .mapNotNull { (_, panes) ->
+            panes.maxByOrNull { it.bounds.width().toLong() * it.bounds.height().toLong() }
+        }
 
     private fun isTopBottomSplit(): Boolean {
         val panes = findSplitPair() ?: return false
@@ -343,14 +386,7 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     }
 
     private fun findSplitBoundary(): Point? {
-        for (window in windows) {
-            if (window.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER ||
-                window.title?.toString().equals("Split screen divider", ignoreCase = true)
-            ) {
-                val rect = Rect().also(window::getBoundsInScreen)
-                if (!rect.isEmpty) return Point(rect.centerX(), rect.centerY())
-            }
-        }
+        findSplitDividerBounds()?.let { return Point(it.centerX(), it.centerY()) }
 
         val panes = findSplitPair() ?: return null
         val first = panes[0].bounds
@@ -365,6 +401,22 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     private fun findSplitDisplayBounds(): Rect? {
         val panes = findSplitPair() ?: return null
         return Rect(panes[0].bounds).apply { union(panes[1].bounds) }
+    }
+
+    private fun findSplitDividerBounds(): Rect? = windows.firstNotNullOfOrNull { window ->
+        if (window.type != AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER &&
+            !window.title?.toString().equals("Split screen divider", ignoreCase = true)
+        ) return@firstNotNullOfOrNull null
+        Rect().also(window::getBoundsInScreen).takeUnless(Rect::isEmpty)
+    }
+
+    private fun currentDisplayBounds(): Rect? = runCatching {
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        Rect(windowManager.maximumWindowMetrics.bounds)
+    }.getOrElse {
+        runCatching {
+            Rect((getSystemService(WINDOW_SERVICE) as WindowManager).currentWindowMetrics.bounds)
+        }.getOrNull()
     }
 
     private fun findCameraPoint(display: Rect): Point {
