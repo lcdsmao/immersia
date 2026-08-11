@@ -1,7 +1,6 @@
 package dev.lcdsmao.immersia
 
 import android.content.Intent
-import android.content.res.Configuration
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Display
@@ -9,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ExperimentalMediaQueryApi
 import androidx.compose.ui.UiMediaScope
