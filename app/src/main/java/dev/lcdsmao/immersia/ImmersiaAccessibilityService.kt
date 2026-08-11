@@ -111,20 +111,20 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     fun beginImmersive() {
         if (operationRunning) return
-        if (!isInSplitMode()) {
-            fail("Create a split screen with your video app and Immersia first.")
-            return
-        }
-        if (!isLandscapeDisplay()) {
-            fail("The system has not applied a landscape display layout. Rotate the device or use the system rotation control, then try again.")
-            return
-        }
-
         operationJob = launch {
             try {
+                if (!isInSplitMode()) {
+                    throw InteractionException("Create a split screen with your video app and Immersia first.")
+                }
+                if (!isLandscapeDisplay()) {
+                    throw InteractionException("The system has not applied a landscape display layout. Rotate the device or use the system rotation control, then try again.")
+                }
+
                 ensureTopBottomSplit()
             } catch (e: InteractionException) {
-                fail(e.message ?: "Immersia failed to operate Samsung's split-screen controls.")
+                listener?.onImmersiveFailed(
+                    e.message ?: "Immersia failed to operate Samsung's split-screen controls."
+                )
             }
         }
     }
@@ -146,51 +146,44 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         }
 
         val boundary = findSplitBoundary() ?: run {
-            fail("Could not find the Samsung split-screen divider.")
-            return
+            throw InteractionException("Could not find the Samsung split-screen divider.")
         }
 
         tap(boundary.x.toFloat(), boundary.y.toFloat())
         delay(POPUP_DELAY.milliseconds)
         if (!clickSystemUiNode("rotating_icon", "Rotate clockwise")) {
-            fail("Samsung's split orientation control was not found.")
-            return
+            throw InteractionException("Samsung's split orientation control was not found.")
         }
         delay(ANIMATION_DELAY.milliseconds)
         if (isTopBottomSplit()) {
             ensureImmersiaCoversCamera()
         } else {
-            fail("Samsung did not switch the split to top/bottom mode.")
+            throw InteractionException("Samsung did not switch the split to top/bottom mode.")
         }
     }
 
     private suspend fun ensureImmersiaCoversCamera() {
         val display = findSplitDisplayBounds() ?: run {
-            fail("Could not read the split-screen bounds.")
-            return
+            throw InteractionException("Could not read the split-screen bounds.")
         }
         val camera = findCameraPoint(display)
         val panes = findSplitPair() ?: run {
-            fail("Could not identify the two split-screen apps.")
-            return
+            throw InteractionException("Could not identify the two split-screen apps.")
         }
         val ours = panes.firstOrNull { it.packageName == packageName }
         if (ours == null) {
-            fail("Immersia is not one of the active split-screen apps.")
-            return
+            throw InteractionException("Immersia is not one of the active split-screen apps.")
         }
 
         if (!ours.bounds.contains(camera.x, camera.y)) {
             val boundary = findSplitBoundary() ?: run {
-                fail("Could not find the Samsung split-screen divider.")
-                return
+                throw InteractionException("Could not find the Samsung split-screen divider.")
             }
 
             tap(boundary.x.toFloat(), boundary.y.toFloat())
             delay(POPUP_DELAY.milliseconds)
             if (!clickSystemUiNode("switching_icon", "Switch window")) {
-                fail("Samsung's switch-window control was not found.")
-                return
+                throw InteractionException("Samsung's switch-window control was not found.")
             }
             delay(ANIMATION_DELAY.milliseconds)
             verifyCameraPane()
@@ -206,29 +199,24 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         if (display == null || camera == null || ours == null ||
             !ours.bounds.contains(camera.x, camera.y)
         ) {
-            fail("Could not place Immersia over the inner camera area.")
-            return
+            throw InteractionException("Could not place Immersia over the inner camera area.")
         }
         resizeImmersiaPane(display, camera)
     }
 
     private suspend fun resizeImmersiaPane(display: Rect, camera: Point) {
         val panes = findSplitPair() ?: run {
-            fail("Could not identify the split-screen apps after switching them.")
-            return
+            throw InteractionException("Could not identify the split-screen apps after switching them.")
         }
         val ours = panes.firstOrNull { it.packageName == packageName } ?: run {
-            fail("Immersia is not one of the active split-screen apps.")
-            return
+            throw InteractionException("Immersia is not one of the active split-screen apps.")
         }
         if (!ours.bounds.contains(camera.x, camera.y)) {
-            fail("The camera area is outside the Immersia pane.")
-            return
+            throw InteractionException("The camera area is outside the Immersia pane.")
         }
 
         val divider = findSplitBoundary() ?: run {
-            fail("Could not find the Samsung split-screen divider.")
-            return
+            throw InteractionException("Could not find the Samsung split-screen divider.")
         }
         // The camera pane is the source of truth. App bounds can still be stale for
         // one accessibility frame after Samsung switches the windows.
@@ -253,7 +241,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         ) {
             listener?.onImmersiveSucceeded()
         } else {
-            fail("The split divider did not reach the requested immersive ratio.")
+            throw InteractionException("The split divider did not reach the requested immersive ratio.")
         }
     }
 
@@ -450,7 +438,10 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         // Samsung exposes the Fold inner UDC geometry in natural-display coordinates
         // through diagnostics, but may hide it from ordinary app windows. Transform
         // the calibrated natural top-right position into the current display rotation.
-        return transformNaturalCameraPoint(display, displayProvider?.display()?.rotation ?: Surface.ROTATION_0)
+        return transformNaturalCameraPoint(
+            display,
+            displayProvider?.display()?.rotation ?: Surface.ROTATION_0
+        )
     }
 
     private fun transformNaturalCameraPoint(display: Rect, rotation: Int): Point {
@@ -477,9 +468,5 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             }
         }
         return Point(x.toInt(), y.toInt())
-    }
-
-    private fun fail(reason: String) {
-        listener?.onImmersiveFailed(reason)
     }
 }
