@@ -7,8 +7,6 @@ import android.content.ComponentName
 import android.graphics.Path
 import android.graphics.Point
 import android.graphics.Rect
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.view.Display
 import android.view.Surface
@@ -16,10 +14,22 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import androidx.core.content.getSystemService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 
 @SuppressLint("AccessibilityPolicy")
-class ImmersiaAccessibilityService : AccessibilityService() {
+class ImmersiaAccessibilityService : AccessibilityService(),
+    CoroutineScope by MainScope() {
     interface Listener {
         fun onImmersiveSucceeded()
         fun onImmersiveFailed(reason: String)
@@ -31,6 +41,8 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     }
 
     private data class Pane(val packageName: String, val bounds: Rect)
+
+    private class InteractionException(message: String) : Exception(message)
 
     companion object {
         @Volatile
@@ -59,11 +71,10 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         const val STAGE_GAP = 8
     }
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val environmentChangedRunnable = Runnable {
-        if (!operationRunning) listener?.onEnvironmentChanged()
-    }
-    private var operationRunning = false
+    private var environmentUpdateJob: Job? = null
+    private var operationJob: Job? = null
+
+    private val operationRunning get() = operationJob?.isActive == true
 
     override fun onServiceConnected() {
         instance = this
@@ -71,8 +82,7 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        operationRunning = false
-        handler.removeCallbacksAndMessages(null)
+        coroutineContext.cancel()
         if (instance === this) instance = null
         super.onDestroy()
     }
@@ -82,8 +92,11 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
             event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {
-            handler.removeCallbacks(environmentChangedRunnable)
-            handler.postDelayed(environmentChangedRunnable, ENVIRONMENT_CHANGE_DELAY)
+            environmentUpdateJob?.cancel()
+            environmentUpdateJob = launch {
+                delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
+                if (!operationRunning) listener?.onEnvironmentChanged()
+            }
         }
     }
 
@@ -107,8 +120,13 @@ class ImmersiaAccessibilityService : AccessibilityService() {
             return
         }
 
-        operationRunning = true
-        ensureTopBottomSplit()
+        operationJob = launch {
+            try {
+                ensureTopBottomSplit()
+            } catch (e: InteractionException) {
+                fail(e.message ?: "Immersia failed to operate Samsung's split-screen controls.")
+            }
+        }
     }
 
     fun isAccessibilityEnabled(): Boolean {
@@ -121,8 +139,7 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
     }
 
-    private fun ensureTopBottomSplit() {
-        if (!operationRunning) return
+    private suspend fun ensureTopBottomSplit() {
         if (isTopBottomSplit()) {
             ensureImmersiaCoversCamera()
             return
@@ -132,26 +149,22 @@ class ImmersiaAccessibilityService : AccessibilityService() {
             fail("Could not find the Samsung split-screen divider.")
             return
         }
-        tap(boundary.x.toFloat(), boundary.y.toFloat()) {
-            handler.postDelayed({
-                if (!operationRunning) return@postDelayed
-                if (!clickSystemUiNode("rotating_icon", "Rotate clockwise")) {
-                    fail("Samsung's split orientation control was not found.")
-                    return@postDelayed
-                }
-                handler.postDelayed({
-                    if (isTopBottomSplit()) {
-                        ensureImmersiaCoversCamera()
-                    } else {
-                        fail("Samsung did not switch the split to top/bottom mode.")
-                    }
-                }, ANIMATION_DELAY)
-            }, POPUP_DELAY)
+
+        tap(boundary.x.toFloat(), boundary.y.toFloat())
+        delay(POPUP_DELAY.milliseconds)
+        if (!clickSystemUiNode("rotating_icon", "Rotate clockwise")) {
+            fail("Samsung's split orientation control was not found.")
+            return
+        }
+        delay(ANIMATION_DELAY.milliseconds)
+        if (isTopBottomSplit()) {
+            ensureImmersiaCoversCamera()
+        } else {
+            fail("Samsung did not switch the split to top/bottom mode.")
         }
     }
 
-    private fun ensureImmersiaCoversCamera() {
-        if (!operationRunning) return
+    private suspend fun ensureImmersiaCoversCamera() {
         val display = findSplitDisplayBounds() ?: run {
             fail("Could not read the split-screen bounds.")
             return
@@ -172,24 +185,21 @@ class ImmersiaAccessibilityService : AccessibilityService() {
                 fail("Could not find the Samsung split-screen divider.")
                 return
             }
-            tap(boundary.x.toFloat(), boundary.y.toFloat()) {
-                handler.postDelayed({
-                    if (!operationRunning) return@postDelayed
-                    if (!clickSystemUiNode("switching_icon", "Switch window")) {
-                        fail("Samsung's switch-window control was not found.")
-                        return@postDelayed
-                    }
-                    handler.postDelayed({
-                        verifyCameraPane()
-                    }, ANIMATION_DELAY)
-                }, POPUP_DELAY)
+
+            tap(boundary.x.toFloat(), boundary.y.toFloat())
+            delay(POPUP_DELAY.milliseconds)
+            if (!clickSystemUiNode("switching_icon", "Switch window")) {
+                fail("Samsung's switch-window control was not found.")
+                return
             }
+            delay(ANIMATION_DELAY.milliseconds)
+            verifyCameraPane()
         } else {
             resizeImmersiaPane(display, camera)
         }
     }
 
-    private fun verifyCameraPane() {
+    private suspend fun verifyCameraPane() {
         val display = findSplitDisplayBounds()
         val camera = display?.let(::findCameraPoint)
         val ours = findSplitPair()?.firstOrNull { it.packageName == packageName }
@@ -202,7 +212,7 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         resizeImmersiaPane(display, camera)
     }
 
-    private fun resizeImmersiaPane(display: Rect, camera: Point) {
+    private suspend fun resizeImmersiaPane(display: Rect, camera: Point) {
         val panes = findSplitPair() ?: run {
             fail("Could not identify the split-screen apps after switching them.")
             return
@@ -228,49 +238,53 @@ class ImmersiaAccessibilityService : AccessibilityService() {
             .toInt()
             .coerceIn(display.top + SAFE_MARGIN, display.bottom - SAFE_MARGIN)
 
-        drag(divider.x.toFloat(), divider.y.toFloat(), divider.x.toFloat(), targetY.toFloat()) {
-            handler.postDelayed({
-                val finalPanes = findSplitPair()
-                val finalOurs = finalPanes?.firstOrNull { it.packageName == packageName }
-                val finalDisplay = findSplitDisplayBounds()
-                val finalCamera = finalDisplay?.let(::findCameraPoint)
-                val finalRatio = finalOurs?.let {
-                    it.bounds.height().toFloat() / (finalDisplay?.height()?.toFloat() ?: 1f)
-                }
-                if (finalOurs != null && finalDisplay != null && finalCamera != null &&
-                    finalOurs.bounds.contains(finalCamera.x, finalCamera.y) &&
-                    finalRatio != null && abs(finalRatio - (1f - VIDEO_RATIO)) < RATIO_TOLERANCE
-                ) {
-                    operationRunning = false
-                    listener?.onImmersiveSucceeded()
-                } else {
-                    fail("The split divider did not reach the requested immersive ratio.")
-                }
-            }, VERIFY_DELAY)
+        drag(divider.x.toFloat(), divider.y.toFloat(), divider.x.toFloat(), targetY.toFloat())
+        delay(VERIFY_DELAY.milliseconds)
+        val finalPanes = findSplitPair()
+        val finalOurs = finalPanes?.firstOrNull { it.packageName == packageName }
+        val finalDisplay = findSplitDisplayBounds()
+        val finalCamera = finalDisplay?.let(::findCameraPoint)
+        val finalRatio = finalOurs?.let {
+            it.bounds.height().toFloat() / (finalDisplay?.height()?.toFloat() ?: 1f)
         }
-    }
-
-    private fun tap(x: Float, y: Float, onCompleted: () -> Unit) {
-        val path = Path().apply {
-            moveTo(x, y)
-            lineTo(x, y)
-        }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, TAP_DURATION))
-            .build()
-        if (!dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) = onCompleted()
-
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    fail("Samsung cancelled the split-screen control gesture.")
-                }
-            }, null)
+        if (finalOurs != null && finalDisplay != null && finalCamera != null &&
+            finalOurs.bounds.contains(finalCamera.x, finalCamera.y) &&
+            finalRatio != null && abs(finalRatio - (1f - VIDEO_RATIO)) < RATIO_TOLERANCE
         ) {
-            fail("Could not dispatch the split-screen control gesture.")
+            listener?.onImmersiveSucceeded()
+        } else {
+            fail("The split divider did not reach the requested immersive ratio.")
         }
     }
 
-    private fun drag(startX: Float, startY: Float, endX: Float, endY: Float, onCompleted: () -> Unit) {
+    private suspend fun tap(x: Float, y: Float) =
+        suspendCancellableCoroutine { cont ->
+            val path = Path().apply {
+                moveTo(x, y)
+                lineTo(x, y)
+            }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, TAP_DURATION))
+                .build()
+            if (!dispatchGesture(gesture, object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) =
+                        cont.resume(Unit)
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        cont.resumeWithException(InteractionException("Samsung cancelled the split-screen tap gesture."))
+                    }
+                }, null)
+            ) {
+                cont.resumeWithException(InteractionException("Could not dispatch the split-screen control gesture."))
+            }
+        }
+
+    private suspend fun drag(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ) = suspendCancellableCoroutine { cont ->
         val path = Path().apply {
             moveTo(startX, startY)
             lineTo(endX, endY)
@@ -279,14 +293,15 @@ class ImmersiaAccessibilityService : AccessibilityService() {
             .addStroke(GestureDescription.StrokeDescription(path, 0, DRAG_DURATION))
             .build()
         if (!dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) = onCompleted()
+                override fun onCompleted(gestureDescription: GestureDescription?) =
+                    cont.resume(Unit)
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    fail("Samsung cancelled the split-divider gesture.")
+                    cont.resumeWithException(InteractionException("Samsung cancelled the split-divider gesture."))
                 }
             }, null)
         ) {
-            fail("Could not dispatch the split-divider gesture.")
+            cont.resumeWithException(InteractionException("Could not dispatch the split-divider gesture."))
         }
     }
 
@@ -300,7 +315,10 @@ class ImmersiaAccessibilityService : AccessibilityService() {
                 val resourceId = node.viewIdResourceName.orEmpty()
                 val contentDescription = node.contentDescription?.toString().orEmpty()
                 if ((resourceId.contains(resourcePart, ignoreCase = true) ||
-                    contentDescription.equals(description, ignoreCase = true)) && node.isVisibleToUser
+                            contentDescription.equals(
+                                description,
+                                ignoreCase = true
+                            )) && node.isVisibleToUser
                 ) {
                     if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
                     node.parent?.let {
@@ -322,13 +340,13 @@ class ImmersiaAccessibilityService : AccessibilityService() {
                 val first = panes[firstIndex]
                 val second = panes[secondIndex]
                 val topBottom = abs(first.bounds.left - second.bounds.left) < BOUNDARY_TOLERANCE &&
-                    abs(first.bounds.right - second.bounds.right) < BOUNDARY_TOLERANCE &&
-                    (abs(first.bounds.bottom - second.bounds.top) < BOUNDARY_TOLERANCE ||
-                        abs(second.bounds.bottom - first.bounds.top) < BOUNDARY_TOLERANCE)
+                        abs(first.bounds.right - second.bounds.right) < BOUNDARY_TOLERANCE &&
+                        (abs(first.bounds.bottom - second.bounds.top) < BOUNDARY_TOLERANCE ||
+                                abs(second.bounds.bottom - first.bounds.top) < BOUNDARY_TOLERANCE)
                 val leftRight = abs(first.bounds.top - second.bounds.top) < BOUNDARY_TOLERANCE &&
-                    abs(first.bounds.bottom - second.bounds.bottom) < BOUNDARY_TOLERANCE &&
-                    (abs(first.bounds.right - second.bounds.left) < BOUNDARY_TOLERANCE ||
-                        abs(second.bounds.right - first.bounds.left) < BOUNDARY_TOLERANCE)
+                        abs(first.bounds.bottom - second.bounds.bottom) < BOUNDARY_TOLERANCE &&
+                        (abs(first.bounds.right - second.bounds.left) < BOUNDARY_TOLERANCE ||
+                                abs(second.bounds.right - first.bounds.left) < BOUNDARY_TOLERANCE)
                 if (topBottom || leftRight) return listOf(first, second)
             }
         }
@@ -382,7 +400,7 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     private fun isTopBottomSplit(): Boolean {
         val panes = findSplitPair() ?: return false
         return abs(panes[0].bounds.left - panes[1].bounds.left) < BOUNDARY_TOLERANCE &&
-            abs(panes[0].bounds.right - panes[1].bounds.right) < BOUNDARY_TOLERANCE
+                abs(panes[0].bounds.right - panes[1].bounds.right) < BOUNDARY_TOLERANCE
     }
 
     private fun findSplitBoundary(): Point? {
@@ -411,16 +429,16 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     }
 
     private fun currentDisplayBounds(): Rect? = runCatching {
-        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val windowManager = getSystemService<WindowManager>()!!
         Rect(windowManager.maximumWindowMetrics.bounds)
     }.getOrElse {
         runCatching {
-            Rect((getSystemService(WINDOW_SERVICE) as WindowManager).currentWindowMetrics.bounds)
+            Rect((getSystemService<WindowManager>()!!).currentWindowMetrics.bounds)
         }.getOrNull()
     }
 
     private fun findCameraPoint(display: Rect): Point {
-        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val windowManager = getSystemService<WindowManager>()!!
         val cutout = windowManager.currentWindowMetrics.windowInsets.displayCutout
         val cutoutRect = cutout?.boundingRects
             ?.filterNot(Rect::isEmpty)
@@ -432,7 +450,7 @@ class ImmersiaAccessibilityService : AccessibilityService() {
         // Samsung exposes the Fold inner UDC geometry in natural-display coordinates
         // through diagnostics, but may hide it from ordinary app windows. Transform
         // the calibrated natural top-right position into the current display rotation.
-        return transformNaturalCameraPoint(display, windowManager.defaultDisplay.rotation)
+        return transformNaturalCameraPoint(display, displayProvider?.display()?.rotation ?: Surface.ROTATION_0)
     }
 
     private fun transformNaturalCameraPoint(display: Rect, rotation: Int): Point {
@@ -462,13 +480,6 @@ class ImmersiaAccessibilityService : AccessibilityService() {
     }
 
     private fun fail(reason: String) {
-        if (!operationRunning) {
-            listener?.onImmersiveFailed(reason)
-            return
-        }
-        operationRunning = false
-        handler.removeCallbacksAndMessages(null)
         listener?.onImmersiveFailed(reason)
     }
-
 }
