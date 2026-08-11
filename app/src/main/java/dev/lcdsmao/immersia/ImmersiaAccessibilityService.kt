@@ -226,6 +226,11 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             .toInt()
             .coerceIn(display.top + SAFE_MARGIN, display.bottom - SAFE_MARGIN)
 
+        if (abs(divider.y - targetY) < BOUNDARY_TOLERANCE) {
+            listener?.onImmersiveSucceeded()
+            return
+        }
+
         drag(divider.x.toFloat(), divider.y.toFloat(), divider.x.toFloat(), targetY.toFloat())
         delay(VERIFY_DELAY.milliseconds)
         val finalPanes = findSplitPair()

@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.sp
 fun ImmersiaContent(
     state: ImmersiaUiState,
     onOpenAccessibilitySettings: () -> Unit,
-    onStartImmersive: () -> Unit,
     onExit: () -> Unit,
     onPause: () -> Unit,
 ) {
@@ -77,13 +76,15 @@ fun ImmersiaContent(
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = state.message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            if (state.message.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = state.message,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
             Spacer(Modifier.height(28.dp))
             Card(
                 colors = CardDefaults.cardColors(
@@ -121,16 +122,12 @@ fun ImmersiaContent(
                 ImmersiveStatus.ACCESSIBILITY_DISABLED -> Button(onClick = onOpenAccessibilitySettings) {
                     Text("Open accessibility settings")
                 }
-                ImmersiveStatus.IDLE -> Button(
-                    onClick = onStartImmersive,
-                    enabled = state.canStartImmersive,
-                ) {
-                    Text("Start immersive mode")
-                }
                 ImmersiveStatus.IMMERSIVE_PAUSE -> Button(onClick = onExit) {
                     Text("Exit Immersia")
                 }
-                ImmersiveStatus.IMMERSIVE -> Unit
+                ImmersiveStatus.IDLE,
+                ImmersiveStatus.IMMERSIVE,
+                    -> Unit
             }
         }
     }

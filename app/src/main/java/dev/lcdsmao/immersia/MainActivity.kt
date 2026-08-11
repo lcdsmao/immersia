@@ -14,6 +14,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ExperimentalMediaQueryApi
 import androidx.compose.ui.UiMediaScope
 import androidx.compose.ui.mediaQuery
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 class MainActivity : ComponentActivity(),
@@ -31,8 +33,12 @@ class MainActivity : ComponentActivity(),
             val isFlatPosture = mediaQuery {
                 windowPosture == UiMediaScope.Posture.Flat
             }
-            LaunchedEffect(isFlatPosture) {
+            val orientation = LocalConfiguration.current.orientation
+            LifecycleResumeEffect(isFlatPosture, orientation) {
                 viewModel.startImmersive(isFlatPosture)
+                onPauseOrDispose {
+                    viewModel.pauseImmersive()
+                }
             }
             ImmersiaTheme {
                 ImmersiaContent(
@@ -40,7 +46,6 @@ class MainActivity : ComponentActivity(),
                     onOpenAccessibilitySettings = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
-                    onStartImmersive = viewModel::startImmersive,
                     onPause = viewModel::pauseImmersive,
                     onExit = { finishAndRemoveTask() },
                 )
@@ -48,21 +53,11 @@ class MainActivity : ComponentActivity(),
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        viewModel.startImmersive()
-    }
-
     override fun onDestroy() {
         if (ImmersiaAccessibilityService.displayProvider === this) {
             ImmersiaAccessibilityService.displayProvider = null
         }
         super.onDestroy()
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        viewModel.startImmersive()
     }
 
     override fun display(): Display = display

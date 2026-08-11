@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
@@ -26,6 +27,7 @@ class ImmersiaViewModel : ViewModel(),
 
     private var environment = Environment()
 
+    private var immersiveJob: Job? = null
     private var autoResumeJob: Job? = null
 
     private fun updateEnvironment(
@@ -56,7 +58,6 @@ class ImmersiaViewModel : ViewModel(),
                     copy(
                         status = ImmersiveStatus.ACCESSIBILITY_DISABLED,
                         message = environmentMessage,
-                        canStartImmersive = false,
                     )
                 }
             }
@@ -65,7 +66,6 @@ class ImmersiaViewModel : ViewModel(),
                     copy(
                         status = ImmersiveStatus.IDLE,
                         message = environmentMessage,
-                        canStartImmersive = false,
                     )
                 }
             }
@@ -73,7 +73,6 @@ class ImmersiaViewModel : ViewModel(),
                 updateUiState {
                     copy(
                         message = environmentMessage,
-                        canStartImmersive = true,
                     )
                 }
             }
@@ -81,9 +80,15 @@ class ImmersiaViewModel : ViewModel(),
     }
 
     fun startImmersive(isFlatPosture: Boolean = environment.fullyUnfolded) {
-        updateEnvironment(fullyUnfolded = isFlatPosture)
-        if (prepareImmersiveOperation()) {
-            ImmersiaAccessibilityService.instance?.beginImmersive()
+        immersiveJob?.cancel()
+        immersiveJob = viewModelScope.launch {
+            while (isActive) {
+                updateEnvironment(fullyUnfolded = isFlatPosture)
+                if (prepareImmersiveOperation()) {
+                    ImmersiaAccessibilityService.instance?.beginImmersive()
+                }
+                delay(IMMERSIVE_CHECK_DELAY)
+            }
         }
     }
 
@@ -94,22 +99,23 @@ class ImmersiaViewModel : ViewModel(),
     }
 
     override fun onImmersiveSucceeded() {
+        immersiveJob?.cancel()
+        immersiveJob = null
         updateUiState {
             copy(
                 status = ImmersiveStatus.IMMERSIVE,
                 message = "",
-                canStartImmersive = false,
             )
         }
     }
 
     override fun onImmersiveFailed(reason: String) {
         setMessage(reason)
-        updateEnvironment()
+        startImmersive()
     }
 
     override fun onEnvironmentChanged() {
-        updateEnvironment()
+        startImmersive()
     }
 
     fun pauseImmersive() {
@@ -118,9 +124,9 @@ class ImmersiaViewModel : ViewModel(),
             copy(
                 status = ImmersiveStatus.IMMERSIVE_PAUSE,
                 message = PAUSE_MESSAGE,
-                canStartImmersive = false,
             )
         }
+        immersiveJob?.cancel()
         autoResumeJob?.cancel()
         autoResumeJob = viewModelScope.launch {
             delay(IMMERSIVE_PAUSE_TIMEOUT)
@@ -159,5 +165,6 @@ class ImmersiaViewModel : ViewModel(),
         const val SPLIT_MESSAGE = "Create a split screen with your video app and Immersia first."
         const val PAUSE_MESSAGE = "The controls will return automatically in three seconds."
         val IMMERSIVE_PAUSE_TIMEOUT = 3.seconds
+        val IMMERSIVE_CHECK_DELAY = 1.seconds
     }
 }
