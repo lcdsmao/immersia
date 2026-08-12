@@ -3,7 +3,6 @@ package dev.lcdsmao.immersia
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Display
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
@@ -16,17 +15,16 @@ import androidx.compose.ui.UiMediaScope
 import androidx.compose.ui.mediaQuery
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
 import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
-class MainActivity : ComponentActivity(),
-    ImmersiaAccessibilityService.DisplayProvider {
+class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<ImmersiaViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ImmersiaAccessibilityService.listener = viewModel
-        ImmersiaAccessibilityService.displayProvider = this
         window.insetsController?.apply {
             hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
             systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -44,6 +42,17 @@ class MainActivity : ComponentActivity(),
                     viewModel.pauseImmersive()
                 }
             }
+
+            LifecycleStartEffect(Unit) {
+                val displayProvider = ImmersiaAccessibilityService.DisplayProvider { display }
+                ImmersiaAccessibilityService.displayProvider = displayProvider
+                onStopOrDispose {
+                    if (ImmersiaAccessibilityService.displayProvider == displayProvider) {
+                        ImmersiaAccessibilityService.displayProvider = null
+                    }
+                }
+            }
+
             ImmersiaTheme {
                 ImmersiaContent(
                     state = viewModel.uiState,
@@ -56,13 +65,4 @@ class MainActivity : ComponentActivity(),
             }
         }
     }
-
-    override fun onDestroy() {
-        if (ImmersiaAccessibilityService.displayProvider === this) {
-            ImmersiaAccessibilityService.displayProvider = null
-        }
-        super.onDestroy()
-    }
-
-    override fun display(): Display = display
 }

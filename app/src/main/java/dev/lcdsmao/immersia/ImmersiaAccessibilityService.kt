@@ -36,7 +36,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         fun onEnvironmentChanged()
     }
 
-    interface DisplayProvider {
+    fun interface DisplayProvider {
         fun display(): Display
     }
 
@@ -89,6 +89,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (operationRunning) return
+        if (displayProvider == null) return
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
             event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {
