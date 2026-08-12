@@ -4,6 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Display
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,6 +27,10 @@ class MainActivity : ComponentActivity(),
         super.onCreate(savedInstanceState)
         ImmersiaAccessibilityService.listener = viewModel
         ImmersiaAccessibilityService.displayProvider = this
+        window.insetsController?.apply {
+            hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
 
         setContent {
             @OptIn(ExperimentalComposeUiApi::class, ExperimentalMediaQueryApi::class)
