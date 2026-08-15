@@ -59,8 +59,6 @@ class MainActivity : ComponentActivity() {
                     onOpenAccessibilitySettings = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
-                    onPause = viewModel::pauseImmersive,
-                    onExit = { finishAndRemoveTask() },
                 )
             }
         }

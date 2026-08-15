@@ -1,7 +1,6 @@
 package dev.lcdsmao.immersia
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,22 +32,60 @@ import androidx.compose.ui.unit.sp
 fun ImmersiaContent(
     state: ImmersiaUiState,
     onOpenAccessibilitySettings: () -> Unit,
-    onExit: () -> Unit,
-    onPause: () -> Unit,
 ) {
-    if (state.status == ImmersiveStatus.IMMERSIVE) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = { onPause() })
-                },
-        )
-        return
+    when (state) {
+        ImmersiaUiState.AccessibilityDisabled -> {
+            InfoLayout(
+                primaryText = "Accessibility access required",
+                secondaryText = "Immersia uses an accessibility service to operate Samsung's split-screen controls.",
+                statusPrefix = "1",
+                statusText = "Accessibility disabled",
+            ) {
+                Button(onClick = onOpenAccessibilitySettings) {
+                    Text("Open accessibility settings")
+                }
+            }
+        }
+        is ImmersiaUiState.Preparation -> {
+            InfoLayout(
+                primaryText = "Ready for immersive video",
+                secondaryText = state.message,
+                statusPrefix = "2",
+                statusText = "Preparing...",
+            )
+        }
+        is ImmersiaUiState.Immersive -> {
+            ImmersiveContent(state)
+        }
     }
+}
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+@Composable
+private fun ImmersiveContent(
+    state: ImmersiaUiState.Immersive,
+) {
+    when (state.mode) {
+        ImmersiveMode.Empty -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            )
+        }
+        ImmersiveMode.KeyboardAndMouse -> Text("TBD")
+    }
+}
+
+@Composable
+private fun InfoLayout(
+    primaryText: String,
+    secondaryText: String,
+    statusPrefix: String,
+    statusText: String,
+    modifier: Modifier = Modifier,
+    extraContent: @Composable () -> Unit = {},
+) {
+    Surface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -67,24 +103,17 @@ fun ImmersiaContent(
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                text = when (state.status) {
-                    ImmersiveStatus.ACCESSIBILITY_DISABLED -> "Accessibility access required"
-                    ImmersiveStatus.IDLE -> "Ready for immersive video"
-                    ImmersiveStatus.IMMERSIVE_PAUSE -> "Immersive mode paused"
-                    ImmersiveStatus.IMMERSIVE -> ""
-                },
+                text = primaryText,
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
             )
-            if (state.message.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = state.message,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = secondaryText,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge,
+            )
             Spacer(Modifier.height(28.dp))
             Card(
                 colors = CardDefaults.cardColors(
@@ -97,38 +126,17 @@ fun ImmersiaContent(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = when (state.status) {
-                            ImmersiveStatus.ACCESSIBILITY_DISABLED -> "1"
-                            ImmersiveStatus.IDLE -> "2"
-                            ImmersiveStatus.IMMERSIVE_PAUSE -> "P"
-                            ImmersiveStatus.IMMERSIVE -> ""
-                        },
+                        text = statusPrefix,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = when (state.status) {
-                            ImmersiveStatus.ACCESSIBILITY_DISABLED -> "Accessibility disabled"
-                            ImmersiveStatus.IDLE -> "Idle"
-                            ImmersiveStatus.IMMERSIVE_PAUSE -> "Immersive pause"
-                            ImmersiveStatus.IMMERSIVE -> ""
-                        },
+                        text = statusText,
                     )
                 }
             }
-            Spacer(Modifier.height(28.dp))
-            when (state.status) {
-                ImmersiveStatus.ACCESSIBILITY_DISABLED -> Button(onClick = onOpenAccessibilitySettings) {
-                    Text("Open accessibility settings")
-                }
-                ImmersiveStatus.IMMERSIVE_PAUSE -> Button(onClick = onExit) {
-                    Text("Exit Immersia")
-                }
-                ImmersiveStatus.IDLE,
-                ImmersiveStatus.IMMERSIVE,
-                    -> Unit
-            }
+            extraContent()
         }
     }
 }

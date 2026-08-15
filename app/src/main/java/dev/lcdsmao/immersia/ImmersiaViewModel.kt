@@ -17,18 +17,17 @@ class ImmersiaViewModel : ViewModel(),
     private data class Environment(
         val accessibilityEnabled: Boolean = false,
         val serviceReady: Boolean = false,
-        val fullyUnfolded: Boolean = true,
+        val fullyUnfolded: Boolean = false,
         val landscapeReady: Boolean = false,
         val inSplitMode: Boolean = false,
     )
 
-    var uiState by mutableStateOf(ImmersiaUiState())
+    var uiState: ImmersiaUiState by mutableStateOf(ImmersiaUiState.AccessibilityDisabled)
         private set
 
     private var environment = Environment()
 
     private var immersiveJob: Job? = null
-    private var autoResumeJob: Job? = null
 
     private fun updateEnvironment(
         fullyUnfolded: Boolean = environment.fullyUnfolded,
@@ -44,36 +43,25 @@ class ImmersiaViewModel : ViewModel(),
             landscapeReady = landscapeReady,
             inSplitMode = inSplitMode,
         )
-        val environmentMessage = when {
-            !environment.accessibilityEnabled -> ACCESSIBILITY_MESSAGE
-            !environment.fullyUnfolded -> UNFOLDED_MESSAGE
-            !environment.serviceReady -> SERVICE_MESSAGE
-            !environment.landscapeReady -> LANDSCAPE_MESSAGE
-            !environment.inSplitMode -> SPLIT_MESSAGE
-            else -> ""
-        }
+
         when {
             !accessibilityEnabled -> {
                 updateUiState {
-                    copy(
-                        status = ImmersiveStatus.ACCESSIBILITY_DISABLED,
-                        message = environmentMessage,
-                    )
+                    ImmersiaUiState.AccessibilityDisabled
                 }
             }
             !isEnvironmentReady() -> {
-                updateUiState {
-                    copy(
-                        status = ImmersiveStatus.IDLE,
-                        message = environmentMessage,
-                    )
+                val environmentMessage = when {
+                    !environment.fullyUnfolded -> UNFOLDED_MESSAGE
+                    !environment.serviceReady -> SERVICE_MESSAGE
+                    !environment.landscapeReady -> LANDSCAPE_MESSAGE
+                    !environment.inSplitMode -> SPLIT_MESSAGE
+                    else -> null
                 }
-            }
-            else -> {
-                updateUiState {
-                    copy(
-                        message = environmentMessage,
-                    )
+                environmentMessage?.let {
+                    updateUiState {
+                        ImmersiaUiState.Preparation(environmentMessage)
+                    }
                 }
             }
         }
@@ -94,7 +82,7 @@ class ImmersiaViewModel : ViewModel(),
 
     private fun prepareImmersiveOperation(): Boolean {
         if (!isEnvironmentReady()) return false
-        setMessage("Adjusting the split screen...")
+        trySetPreparationMessage("Adjusting the split screen...")
         return true
     }
 
@@ -102,15 +90,12 @@ class ImmersiaViewModel : ViewModel(),
         immersiveJob?.cancel()
         immersiveJob = null
         updateUiState {
-            copy(
-                status = ImmersiveStatus.IMMERSIVE,
-                message = "",
-            )
+            ImmersiaUiState.Immersive(mode = ImmersiveMode.Empty)
         }
     }
 
     override fun onImmersiveFailed(reason: String) {
-        setMessage(reason)
+        trySetPreparationMessage(reason)
         startImmersive()
     }
 
@@ -119,19 +104,8 @@ class ImmersiaViewModel : ViewModel(),
     }
 
     fun pauseImmersive() {
-        if (uiState.status != ImmersiveStatus.IMMERSIVE) return
-        updateUiState {
-            copy(
-                status = ImmersiveStatus.IMMERSIVE_PAUSE,
-                message = PAUSE_MESSAGE,
-            )
-        }
+        if (uiState !is ImmersiaUiState.Immersive) return
         immersiveJob?.cancel()
-        autoResumeJob?.cancel()
-        autoResumeJob = viewModelScope.launch {
-            delay(IMMERSIVE_PAUSE_TIMEOUT)
-            startImmersive()
-        }
     }
 
     fun updateUiState(update: ImmersiaUiState.() -> ImmersiaUiState) {
@@ -145,8 +119,10 @@ class ImmersiaViewModel : ViewModel(),
                 environment.landscapeReady &&
                 environment.inSplitMode
 
-    private fun setMessage(message: String) {
-        updateUiState { copy(message = message) }
+    private fun trySetPreparationMessage(message: String) {
+        updateUiState {
+            (this as? ImmersiaUiState.Preparation)?.copy(message = message) ?: this
+        }
     }
 
     override fun onCleared() {
@@ -156,15 +132,11 @@ class ImmersiaViewModel : ViewModel(),
     }
 
     companion object {
-        const val ACCESSIBILITY_MESSAGE =
-            "Immersia uses an accessibility service to operate Samsung's split-screen controls."
         const val UNFOLDED_MESSAGE = "Open the inner display completely before starting Immersia."
         const val SERVICE_MESSAGE =
             "The accessibility service is still starting. Try again in a moment."
         const val LANDSCAPE_MESSAGE = "Rotate the device to landscape before starting Immersia."
         const val SPLIT_MESSAGE = "Create a split screen with your video app and Immersia first."
-        const val PAUSE_MESSAGE = "The controls will return automatically in three seconds."
-        val IMMERSIVE_PAUSE_TIMEOUT = 3.seconds
         val IMMERSIVE_CHECK_DELAY = 1.seconds
     }
 }

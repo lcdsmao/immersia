@@ -1,6 +1,13 @@
 package dev.lcdsmao.immersia
 
-data class ImmersiaUiState(
-    val status: ImmersiveStatus = ImmersiveStatus.ACCESSIBILITY_DISABLED,
-    val message: String = "Immersia uses an accessibility service to operate Samsung's split-screen controls.",
-)
+sealed interface ImmersiaUiState {
+    data object AccessibilityDisabled : ImmersiaUiState
+
+    data class Preparation(
+        val message: String,
+    ) : ImmersiaUiState
+
+    data class Immersive(
+        val mode: ImmersiveMode,
+    ) : ImmersiaUiState
+}
