@@ -74,7 +74,8 @@ private fun ImmersiveContent(
     onChangeImmersiveMode: (ImmersiveMode) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        var dragDeltaResult by remember { mutableIntStateOf(0) }
+        var dragXOffset by remember { mutableIntStateOf(0) }
+        var dragYOffset by remember { mutableIntStateOf(0) }
         Spacer(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -82,19 +83,23 @@ private fun ImmersiveContent(
                 .height(16.dp)
                 .pointerInput(state.mode) {
                     detectDragGestures(
+                        onDragStart = {
+                            dragXOffset = 0
+                            dragYOffset = 0
+                        },
                         onDragEnd = {
-                            onChangeImmersiveMode(ImmersiveMode.entries[(state.mode.ordinal + dragDeltaResult + ImmersiveMode.entries.size) % ImmersiveMode.entries.size])
+                            val delta =
+                                if (abs(dragXOffset) > abs(dragYOffset) && abs(dragXOffset) > 80.dp.toPx()) {
+                                    if (dragXOffset > 0) 1 else -1
+                                } else {
+                                    0
+                                }
+                            onChangeImmersiveMode(ImmersiveMode.entries[(state.mode.ordinal + delta + ImmersiveMode.entries.size) % ImmersiveMode.entries.size])
                         }
                     ) { change, dragAmount ->
                         change.consume()
-                        val xOffset = dragAmount.x
-                        val yOffset = dragAmount.y
-                        if (abs(xOffset) > abs(yOffset)) {
-                            val delta = if (xOffset > 0) 1 else -1
-                            dragDeltaResult = delta
-                        } else {
-                            dragDeltaResult = 0
-                        }
+                        dragXOffset += dragAmount.x.toInt()
+                        dragYOffset += dragAmount.y.toInt()
                     }
                 }
         )
