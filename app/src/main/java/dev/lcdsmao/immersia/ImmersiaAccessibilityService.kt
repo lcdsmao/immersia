@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -29,12 +30,8 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @SuppressLint("AccessibilityPolicy")
 class ImmersiaAccessibilityService : AccessibilityService(),
+    ImmersiaAccessibilityInteractor,
     CoroutineScope by MainScope() {
-    interface Listener {
-        fun onImmersiveSucceeded()
-        fun onImmersiveFailed(reason: String)
-        fun onEnvironmentChanged()
-    }
 
     fun interface DisplayProvider {
         fun display(): Display
@@ -48,9 +45,6 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         @Volatile
         var instance: ImmersiaAccessibilityService? = null
             private set
-
-        @Volatile
-        var listener: Listener? = null
 
         @Volatile
         var displayProvider: DisplayProvider? = null
@@ -76,9 +70,14 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     private val operationRunning get() = operationJob?.isActive == true
 
+    override val eventFlow = MutableSharedFlow<ImmersiaAccessibilityInteractor.Event>(
+        replay = 1,
+        extraBufferCapacity = 20,
+    )
+
     override fun onServiceConnected() {
         instance = this
-        listener?.onEnvironmentChanged()
+        eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.EnvironmentChanged)
     }
 
     override fun onDestroy() {
@@ -96,7 +95,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             environmentUpdateJob?.cancel()
             environmentUpdateJob = launch {
                 delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
-                if (!operationRunning) listener?.onEnvironmentChanged()
+                if (!operationRunning) eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.EnvironmentChanged)
             }
         }
     }
@@ -110,7 +109,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         return display.rotation == Surface.ROTATION_90 || display.rotation == Surface.ROTATION_270
     }
 
-    fun beginImmersive() {
+    override fun beginImmersive() {
         if (operationRunning) return
         operationJob = launch {
             try {
@@ -123,14 +122,16 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
                 ensureTopBottomSplit()
             } catch (e: InteractionException) {
-                listener?.onImmersiveFailed(
-                    e.message ?: "Immersia failed to operate Samsung's split-screen controls."
+                eventFlow.tryEmit(
+                    ImmersiaAccessibilityInteractor.Event.ImmersiveFailed(
+                        e.message ?: "Immersia failed to operate Samsung's split-screen controls."
+                    )
                 )
             }
         }
     }
 
-    fun isAccessibilityEnabled(): Boolean {
+    override fun isAccessibilityEnabled(): Boolean {
         val enabled = Settings.Secure.getString(
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
@@ -228,7 +229,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             .coerceIn(display.top + SAFE_MARGIN, display.bottom - SAFE_MARGIN)
 
         if (abs(divider.y - targetY) < BOUNDARY_TOLERANCE) {
-            listener?.onImmersiveSucceeded()
+            eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
             return
         }
 
@@ -245,7 +246,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             finalOurs.bounds.contains(finalCamera.x, finalCamera.y) &&
             finalRatio != null && abs(finalRatio - (1f - VIDEO_RATIO)) < RATIO_TOLERANCE
         ) {
-            listener?.onImmersiveSucceeded()
+            eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
         } else {
             throw InteractionException("The split divider did not reach the requested immersive ratio.")
         }

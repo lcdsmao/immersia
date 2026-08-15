@@ -16,15 +16,20 @@ import androidx.compose.ui.mediaQuery
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 class MainActivity : ComponentActivity() {
-    private val viewModel by viewModels<ImmersiaViewModel>()
+    private val viewModel by viewModels<ImmersiaViewModel> {
+        viewModelFactory {
+            initializer { ImmersiaViewModel(immersiveInteractor = ImmersiaAccessibilityService.instance) }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        ImmersiaAccessibilityService.listener = viewModel
         window.insetsController?.apply {
             hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
             systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -37,7 +42,7 @@ class MainActivity : ComponentActivity() {
             }
             val orientation = LocalConfiguration.current.orientation
             LifecycleResumeEffect(isFlatPosture, orientation) {
-                viewModel.startImmersive(isFlatPosture)
+                viewModel.tryStartImmersive(isFlatPosture)
                 onPauseOrDispose {
                     viewModel.pauseImmersive()
                 }

@@ -11,8 +11,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-class ImmersiaViewModel : ViewModel(),
-    ImmersiaAccessibilityService.Listener {
+class ImmersiaViewModel(
+    private val immersiveInteractor: ImmersiaAccessibilityInteractor?,
+) : ViewModel() {
 
     private data class Environment(
         val accessibilityEnabled: Boolean = false,
@@ -28,6 +29,34 @@ class ImmersiaViewModel : ViewModel(),
     private var environment = Environment()
 
     private var immersiveJob: Job? = null
+    private var eventJob: Job? = null
+
+    fun tryStartImmersive(isFlatPosture: Boolean = environment.fullyUnfolded) {
+        val interactor = immersiveInteractor ?: return
+        immersiveJob?.cancel()
+        immersiveJob = viewModelScope.launch {
+            while (isActive) {
+                updateEnvironment(fullyUnfolded = isFlatPosture)
+                if (prepareImmersiveOperation()) {
+                    interactor.beginImmersive()
+                }
+                delay(IMMERSIVE_CHECK_DELAY)
+            }
+        }
+        if (eventJob == null) {
+            eventJob = viewModelScope.launch {
+                interactor.eventFlow.collect { event ->
+                    when (event) {
+                        ImmersiaAccessibilityInteractor.Event.EnvironmentChanged -> onEnvironmentChanged()
+                        is ImmersiaAccessibilityInteractor.Event.ImmersiveFailed -> onImmersiveFailed(
+                            event.reason
+                        )
+                        ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded -> onImmersiveSucceeded()
+                    }
+                }
+            }
+        }
+    }
 
     private fun updateEnvironment(
         fullyUnfolded: Boolean = environment.fullyUnfolded,
@@ -67,26 +96,13 @@ class ImmersiaViewModel : ViewModel(),
         }
     }
 
-    fun startImmersive(isFlatPosture: Boolean = environment.fullyUnfolded) {
-        immersiveJob?.cancel()
-        immersiveJob = viewModelScope.launch {
-            while (isActive) {
-                updateEnvironment(fullyUnfolded = isFlatPosture)
-                if (prepareImmersiveOperation()) {
-                    ImmersiaAccessibilityService.instance?.beginImmersive()
-                }
-                delay(IMMERSIVE_CHECK_DELAY)
-            }
-        }
-    }
-
     private fun prepareImmersiveOperation(): Boolean {
         if (!isEnvironmentReady()) return false
         trySetPreparationMessage("Adjusting the split screen...")
         return true
     }
 
-    override fun onImmersiveSucceeded() {
+    private fun onImmersiveSucceeded() {
         immersiveJob?.cancel()
         immersiveJob = null
         updateUiState {
@@ -94,13 +110,13 @@ class ImmersiaViewModel : ViewModel(),
         }
     }
 
-    override fun onImmersiveFailed(reason: String) {
+    private fun onImmersiveFailed(reason: String) {
         trySetPreparationMessage(reason)
-        startImmersive()
+        tryStartImmersive()
     }
 
-    override fun onEnvironmentChanged() {
-        startImmersive()
+    private fun onEnvironmentChanged() {
+        tryStartImmersive()
     }
 
     fun pauseImmersive() {
@@ -122,12 +138,6 @@ class ImmersiaViewModel : ViewModel(),
     private fun trySetPreparationMessage(message: String) {
         updateUiState {
             (this as? ImmersiaUiState.Preparation)?.copy(message = message) ?: this
-        }
-    }
-
-    override fun onCleared() {
-        if (ImmersiaAccessibilityService.listener == this) {
-            ImmersiaAccessibilityService.listener = null
         }
     }
 
