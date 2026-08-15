@@ -23,10 +23,14 @@ import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<ImmersiaViewModel> {
         viewModelFactory {
-            initializer { ImmersiaViewModel(immersiveInteractor = ImmersiaAccessibilityService.instance) }
+            initializer { ImmersiaViewModel(immersiveInteractor = { ImmersiaAccessibilityService.instance }) }
         }
     }
 
+    @OptIn(
+        ExperimentalComposeUiApi::class,
+        ExperimentalMediaQueryApi::class
+    )
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -36,7 +40,6 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            @OptIn(ExperimentalComposeUiApi::class, ExperimentalMediaQueryApi::class)
             val isFlatPosture = mediaQuery {
                 windowPosture == UiMediaScope.Posture.Flat
             }

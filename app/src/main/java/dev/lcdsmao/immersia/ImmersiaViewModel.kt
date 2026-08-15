@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
 class ImmersiaViewModel(
-    private val immersiveInteractor: ImmersiaAccessibilityInteractor?,
+    private val immersiveInteractor: () -> ImmersiaAccessibilityInteractor?,
 ) : ViewModel() {
 
     private data class Environment(
@@ -32,7 +32,7 @@ class ImmersiaViewModel(
     private var eventJob: Job? = null
 
     fun tryStartImmersive(isFlatPosture: Boolean = environment.fullyUnfolded) {
-        val interactor = immersiveInteractor ?: return
+        val interactor = immersiveInteractor() ?: return
         immersiveJob?.cancel()
         immersiveJob = viewModelScope.launch {
             while (isActive) {
