@@ -14,7 +14,6 @@ import kotlin.time.Duration.Companion.seconds
 class ImmersiaViewModel(
     private val immersiveInteractor: () -> ImmersiaAccessibilityInteractor?,
 ) : ViewModel() {
-
     private data class Environment(
         val accessibilityEnabled: Boolean = false,
         val serviceReady: Boolean = false,
@@ -27,7 +26,6 @@ class ImmersiaViewModel(
         private set
 
     private var environment = Environment()
-
     private var immersiveJob: Job? = null
     private var eventJob: Job? = null
 
@@ -37,9 +35,7 @@ class ImmersiaViewModel(
         immersiveJob = viewModelScope.launch {
             while (isActive) {
                 updateEnvironment(fullyUnfolded = isFlatPosture)
-                if (prepareImmersiveOperation()) {
-                    interactor.beginImmersive()
-                }
+                if (prepareImmersiveOperation()) interactor.beginImmersive()
                 delay(IMMERSIVE_CHECK_DELAY)
             }
         }
@@ -47,7 +43,7 @@ class ImmersiaViewModel(
             eventJob = viewModelScope.launch {
                 interactor.eventFlow.collect { event ->
                     when (event) {
-                        ImmersiaAccessibilityInteractor.Event.EnvironmentChanged -> onEnvironmentChanged()
+                        ImmersiaAccessibilityInteractor.Event.EnvironmentChanged -> tryStartImmersive()
                         is ImmersiaAccessibilityInteractor.Event.ImmersiveFailed -> onImmersiveFailed(
                             event.reason
                         )
@@ -59,70 +55,59 @@ class ImmersiaViewModel(
     }
 
     fun changeImmersiveMode(mode: ImmersiveMode) {
-        updateUiState {
-            (this as? ImmersiaUiState.Immersive)?.copy(mode = mode) ?: this
-        }
+        updateUiState { (this as? ImmersiaUiState.Immersive)?.copy(mode = mode) ?: this }
     }
 
-    private fun updateEnvironment(
-        fullyUnfolded: Boolean = environment.fullyUnfolded,
-    ) {
-        val service = ImmersiaAccessibilityService.instance
-        val accessibilityEnabled = service?.isAccessibilityEnabled() == true
-        val landscapeReady = service?.isLandscapeDisplay() == true
-        val inSplitMode = service?.isInSplitMode() == true
-        environment = Environment(
-            accessibilityEnabled = accessibilityEnabled,
-            serviceReady = service != null,
-            fullyUnfolded = fullyUnfolded,
-            landscapeReady = landscapeReady,
-            inSplitMode = inSplitMode,
-        )
-
-        when {
-            !accessibilityEnabled -> {
-                updateUiState {
-                    ImmersiaUiState.AccessibilityDisabled
-                }
+    fun onKeyboardKey(key: KeyboardKey) {
+        val interactor = immersiveInteractor() ?: return
+        val immersive = uiState as? ImmersiaUiState.Immersive ?: return
+        if (key.isModifier) {
+            val wasHeld = key in immersive.heldModifiers
+            val nextModifiers =
+                if (wasHeld) immersive.heldModifiers - key else immersive.heldModifiers + key
+            updateUiState {
+                immersive.copy(
+                    heldModifiers = nextModifiers,
+                    message = if (wasHeld) "Sending ${key.label}." else "${key.label} held.",
+                )
             }
-            !isEnvironmentReady() -> {
-                val environmentMessage = when {
-                    !environment.fullyUnfolded -> UNFOLDED_MESSAGE
-                    !environment.serviceReady -> SERVICE_MESSAGE
-                    !environment.landscapeReady -> LANDSCAPE_MESSAGE
-                    !environment.inSplitMode -> SPLIT_MESSAGE
-                    else -> null
-                }
-                environmentMessage?.let {
-                    updateUiState {
-                        ImmersiaUiState.Preparation(environmentMessage)
+            if (wasHeld) interactor.sendKeyboardStroke(key, emptySet())
+            return
+        }
+
+        val modifiers = immersive.heldModifiers
+        updateUiState {
+            immersive.copy(
+                message = "Sending ${
+                    modifiers.joinToString("+") { it.label }.let { prefix ->
+                        if (prefix.isEmpty()) key.label else "$prefix+${key.label}"
                     }
-                }
+                }.",
+            )
+        }
+        interactor.sendKeyboardStroke(key, modifiers)
+        if (modifiers.isNotEmpty()) {
+            val consumed = KeyboardKey.entries.first { it in modifiers }
+            updateUiState {
+                (this as ImmersiaUiState.Immersive).copy(heldModifiers = modifiers - consumed)
             }
         }
     }
 
-    private fun prepareImmersiveOperation(): Boolean {
-        if (!isEnvironmentReady()) return false
-        trySetPreparationMessage("Adjusting the split screen...")
-        return true
+    fun onMouseMove(deltaX: Int, deltaY: Int) {
+        val result = immersiveInteractor()?.sendMouseMove(deltaX, deltaY) ?: return
+        updateImmersiveMessage(result.message)
     }
 
-    private fun onImmersiveSucceeded() {
-        immersiveJob?.cancel()
-        immersiveJob = null
+    fun onMouseButton(button: MouseButton) {
+        val result = immersiveInteractor()?.clickMouse(button) ?: return
+        updateImmersiveMessage(result.message)
+    }
+
+    private fun updateImmersiveMessage(message: String) {
         updateUiState {
-            ImmersiaUiState.Immersive(mode = ImmersiveMode.Empty)
+            (this as? ImmersiaUiState.Immersive)?.copy(message = message) ?: this
         }
-    }
-
-    private fun onImmersiveFailed(reason: String) {
-        trySetPreparationMessage(reason)
-        tryStartImmersive()
-    }
-
-    private fun onEnvironmentChanged() {
-        tryStartImmersive()
     }
 
     fun pauseImmersive() {
@@ -130,21 +115,59 @@ class ImmersiaViewModel(
         immersiveJob?.cancel()
     }
 
-    fun updateUiState(update: ImmersiaUiState.() -> ImmersiaUiState) {
-        uiState = uiState.update()
+    private fun updateEnvironment(fullyUnfolded: Boolean = environment.fullyUnfolded) {
+        val interactor = immersiveInteractor()
+        environment = Environment(
+            accessibilityEnabled = interactor?.isAccessibilityEnabled() == true,
+            serviceReady = interactor != null,
+            fullyUnfolded = fullyUnfolded,
+            landscapeReady = interactor?.isLandscapeDisplay() == true,
+            inSplitMode = interactor?.isInSplitMode() == true,
+        )
+        when {
+            !environment.accessibilityEnabled -> updateUiState { ImmersiaUiState.AccessibilityDisabled }
+            !isEnvironmentReady() -> updateUiState {
+                ImmersiaUiState.Preparation(environmentMessage())
+            }
+        }
     }
 
-    private fun isEnvironmentReady(): Boolean =
-        environment.accessibilityEnabled &&
-                environment.serviceReady &&
-                environment.fullyUnfolded &&
-                environment.landscapeReady &&
-                environment.inSplitMode
-
-    private fun trySetPreparationMessage(message: String) {
+    private fun prepareImmersiveOperation(): Boolean {
+        if (!isEnvironmentReady()) return false
         updateUiState {
-            (this as? ImmersiaUiState.Preparation)?.copy(message = message) ?: this
+            (this as? ImmersiaUiState.Preparation)?.copy(message = "Adjusting the split screen...")
+                ?: this
         }
+        return true
+    }
+
+    private fun onImmersiveSucceeded() {
+        immersiveJob?.cancel()
+        immersiveJob = null
+        updateUiState {
+            this as? ImmersiaUiState.Immersive ?: ImmersiaUiState.Immersive(ImmersiveMode.Empty)
+        }
+    }
+
+    private fun onImmersiveFailed(reason: String) {
+        updateUiState { (this as? ImmersiaUiState.Preparation)?.copy(message = reason) ?: this }
+        tryStartImmersive()
+    }
+
+    private fun environmentMessage() = when {
+        !environment.fullyUnfolded -> UNFOLDED_MESSAGE
+        !environment.serviceReady -> SERVICE_MESSAGE
+        !environment.landscapeReady -> LANDSCAPE_MESSAGE
+        !environment.inSplitMode -> SPLIT_MESSAGE
+        else -> "Preparing..."
+    }
+
+    private fun isEnvironmentReady() =
+        environment.accessibilityEnabled && environment.serviceReady &&
+                environment.fullyUnfolded && environment.landscapeReady && environment.inSplitMode
+
+    private fun updateUiState(update: ImmersiaUiState.() -> ImmersiaUiState) {
+        uiState = uiState.update()
     }
 
     companion object {

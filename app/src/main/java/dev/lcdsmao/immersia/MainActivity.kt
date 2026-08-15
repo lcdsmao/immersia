@@ -68,6 +68,9 @@ class MainActivity : ComponentActivity() {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
                     onChangeImmersiveMode = viewModel::changeImmersiveMode,
+                    onKeyboardKey = viewModel::onKeyboardKey,
+                    onMouseMove = viewModel::onMouseMove,
+                    onMouseButton = viewModel::onMouseButton,
                 )
             }
         }

@@ -67,6 +67,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     private var environmentUpdateJob: Job? = null
     private var operationJob: Job? = null
+    private val unifiedRemoteClient by lazy { UnifiedRemoteClient(this) }
 
     private val operationRunning get() = operationJob?.isActive == true
 
@@ -102,9 +103,9 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onInterrupt() = Unit
 
-    fun isInSplitMode(): Boolean = findSplitPair() != null
+    override fun isInSplitMode(): Boolean = findSplitPair() != null
 
-    fun isLandscapeDisplay(): Boolean {
+    override fun isLandscapeDisplay(): Boolean {
         val display = displayProvider?.display() ?: return false
         return display.rotation == Surface.ROTATION_90 || display.rotation == Surface.ROTATION_270
     }
@@ -130,6 +131,17 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             }
         }
     }
+
+    override fun sendKeyboardStroke(
+        key: KeyboardKey,
+        modifiers: Set<KeyboardKey>,
+    ): UnifiedRemoteClient.Result = unifiedRemoteClient.sendStroke(key, modifiers)
+
+    override fun sendMouseMove(deltaX: Int, deltaY: Int): UnifiedRemoteClient.Result =
+        unifiedRemoteClient.sendMouseMove(deltaX, deltaY)
+
+    override fun clickMouse(button: MouseButton): UnifiedRemoteClient.Result =
+        unifiedRemoteClient.clickMouse(button)
 
     override fun isAccessibilityEnabled(): Boolean {
         val enabled = Settings.Secure.getString(

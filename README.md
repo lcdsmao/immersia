@@ -22,7 +22,20 @@ Immersia will:
 - Convert left/right split-screen to top/bottom when needed.
 - Place Immersia over the camera side.
 - Resize the Immersia pane to approximately 32% of the display.
-- Show a plain black companion surface.
+- Show the keyboard and mouse companion surface by default.
+
+The immersive pane includes a split keyboard and central mouse surface. The
+keyboard uses a standard QWERTY layout, with the left and right halves on each
+side of the mouse area. Modifier buttons latch state in the UI only. C and V
+send one combined `stroke` action with the selected modifiers, preventing
+duplicate character events. A held modifier is sent and cleared only when
+tapped again. After a character stroke, the oldest held modifier is consumed;
+for example, `Win+Shift+C` leaves `Shift` held.
+Immersia sends these actions through the documented Unified Remote
+Android broadcast integration, so Unified Remote Server sends them to the
+Windows foreground application. Unified Remote must be installed, paired, and
+connected to the Windows PC. Mouse movement and left/right clicks use Unified
+Remote's `Core.Input` actions.
 
 Double-tap the black surface to pause immersive mode. The controls return temporarily and immersive mode resumes automatically after three seconds. Use **Exit Immersia** to leave the helper app.
 

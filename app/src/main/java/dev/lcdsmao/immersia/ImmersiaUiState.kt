@@ -9,5 +9,7 @@ sealed interface ImmersiaUiState {
 
     data class Immersive(
         val mode: ImmersiveMode,
+        val heldModifiers: Set<KeyboardKey> = emptySet(),
+        val message: String = "Unified Remote keyboard and mouse controls ready.",
     ) : ImmersiaUiState
 }

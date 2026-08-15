@@ -2,12 +2,17 @@ package dev.lcdsmao.immersia
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -15,56 +20,58 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
 
 @Composable
 fun ImmersiaContent(
     state: ImmersiaUiState,
     onOpenAccessibilitySettings: () -> Unit,
     onChangeImmersiveMode: (ImmersiveMode) -> Unit,
+    onKeyboardKey: (KeyboardKey) -> Unit,
+    onMouseMove: (Int, Int) -> Unit,
+    onMouseButton: (MouseButton) -> Unit,
 ) {
     when (state) {
-        ImmersiaUiState.AccessibilityDisabled -> {
-            InfoLayout(
-                primaryText = "Accessibility access required",
-                secondaryText = "Immersia uses an accessibility service to operate Samsung's split-screen controls.",
-                statusPrefix = "1",
-                statusText = "Accessibility disabled",
-            ) {
-                Button(onClick = onOpenAccessibilitySettings) {
-                    Text("Open accessibility settings")
-                }
+        ImmersiaUiState.AccessibilityDisabled -> InfoLayout(
+            primaryText = "Accessibility access required",
+            secondaryText = "Immersia uses an accessibility service to operate Samsung's split-screen controls.",
+            statusPrefix = "1",
+            statusText = "Accessibility disabled",
+        ) {
+            Button(onClick = onOpenAccessibilitySettings) {
+                Text("Open accessibility settings")
             }
         }
-        is ImmersiaUiState.Preparation -> {
-            InfoLayout(
-                primaryText = "Ready for immersive video",
-                secondaryText = state.message,
-                statusPrefix = "2",
-                statusText = "Preparing...",
-            )
-        }
-        is ImmersiaUiState.Immersive -> {
-            ImmersiveContent(state, onChangeImmersiveMode)
-        }
+
+        is ImmersiaUiState.Preparation -> InfoLayout(
+            primaryText = "Ready for immersive video",
+            secondaryText = state.message,
+            statusPrefix = "2",
+            statusText = "Preparing...",
+        )
+
+        is ImmersiaUiState.Immersive -> ImmersiveContent(
+            state = state,
+            onChangeImmersiveMode = onChangeImmersiveMode,
+            onKeyboardKey = onKeyboardKey,
+            onMouseMove = onMouseMove,
+            onMouseButton = onMouseButton,
+        )
     }
 }
 
@@ -72,48 +79,224 @@ fun ImmersiaContent(
 private fun ImmersiveContent(
     state: ImmersiaUiState.Immersive,
     onChangeImmersiveMode: (ImmersiveMode) -> Unit,
+    onKeyboardKey: (KeyboardKey) -> Unit,
+    onMouseMove: (Int, Int) -> Unit,
+    onMouseButton: (MouseButton) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        var dragXOffset by remember { mutableIntStateOf(0) }
-        var dragYOffset by remember { mutableIntStateOf(0) }
+        when (state.mode) {
+            ImmersiveMode.Empty -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+            )
+
+            ImmersiveMode.UnifiedRemote -> KeyboardMouseSurface(
+                state = state,
+                onKeyboardKey = onKeyboardKey,
+                onMouseMove = onMouseMove,
+                onMouseButton = onMouseButton,
+            )
+        }
+
         Spacer(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .width(120.dp)
-                .height(16.dp)
+                .align(Alignment.BottomEnd)
+                .width(48.dp)
+                .height(48.dp)
                 .pointerInput(state.mode) {
-                    detectDragGestures(
-                        onDragStart = {
-                            dragXOffset = 0
-                            dragYOffset = 0
-                        },
-                        onDragEnd = {
-                            val delta =
-                                if (abs(dragXOffset) > abs(dragYOffset) && abs(dragXOffset) > 80.dp.toPx()) {
-                                    if (dragXOffset > 0) 1 else -1
-                                } else {
-                                    0
-                                }
-                            onChangeImmersiveMode(ImmersiveMode.entries[(state.mode.ordinal + delta + ImmersiveMode.entries.size) % ImmersiveMode.entries.size])
-                        }
-                    ) { change, dragAmount ->
-                        change.consume()
-                        dragXOffset += dragAmount.x.toInt()
-                        dragYOffset += dragAmount.y.toInt()
-                    }
+                    detectTapGestures(onDoubleTap = {
+                        onChangeImmersiveMode(
+                            ImmersiveMode.entries[
+                                (state.mode.ordinal + 1) % ImmersiveMode.entries.size
+                            ],
+                        )
+                    })
                 }
         )
+    }
+}
 
-        when (state.mode) {
-            ImmersiveMode.Empty -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black)
+@Composable
+private fun KeyboardMouseSurface(
+    state: ImmersiaUiState.Immersive,
+    onKeyboardKey: (KeyboardKey) -> Unit,
+    onMouseMove: (Int, Int) -> Unit,
+    onMouseButton: (MouseButton) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 48.dp, vertical = 8.dp),
+        ) {
+            val mouseWidth = (maxWidth * 0.32f).coerceIn(84.dp, 160.dp)
+            val keyboardGap = (maxWidth * 0.07f).coerceIn(10.dp, 22.dp)
+            val keyGap = 2.dp
+            val maxKeyCount = 7
+            val keyWidth = (
+                    maxWidth - mouseWidth - keyboardGap * 2 - keyGap * (maxKeyCount * 2 - 2)
+                    ) / (maxKeyCount * 2)
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = state.message,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 8.sp,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    KeyboardHalf(
+                        rows = KeyboardKey.leftHalf,
+                        keyWidth = keyWidth,
+                        keyGap = keyGap,
+                        horizontalAlignment = Alignment.Start,
+                        heldModifiers = state.heldModifiers,
+                        onKey = onKeyboardKey,
+                        modifier = Modifier.weight(1f),
+                    )
+                    MouseSurface(
+                        onMove = onMouseMove,
+                        onButton = onMouseButton,
+                        modifier = Modifier
+                            .width(mouseWidth)
+                            .fillMaxHeight(),
+                    )
+                    KeyboardHalf(
+                        rows = KeyboardKey.rightHalf,
+                        keyWidth = keyWidth,
+                        keyGap = keyGap,
+                        horizontalAlignment = Alignment.End,
+                        heldModifiers = state.heldModifiers,
+                        onKey = onKeyboardKey,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
-            ImmersiveMode.KeyboardAndMouse -> Text("TBD")
         }
+    }
+}
+
+@Composable
+private fun KeyboardHalf(
+    rows: List<List<KeyboardKey>>,
+    keyWidth: Dp,
+    keyGap: Dp,
+    horizontalAlignment: Alignment.Horizontal,
+    heldModifiers: Set<KeyboardKey>,
+    onKey: (KeyboardKey) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(keyGap),
+        horizontalAlignment = horizontalAlignment,
+    ) {
+        rows.forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(keyGap),
+            ) {
+                row.forEach { key ->
+                    KeyboardKeyButton(
+                        key = key,
+                        active = key in heldModifiers,
+                        onClick = { onKey(key) },
+                        modifier = Modifier.width(keyWidth),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MouseSurface(
+    onMove: (Int, Int) -> Unit,
+    onButton: (MouseButton) -> Unit,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        onMove(dragAmount.x.toInt(), dragAmount.y.toInt())
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        onButton(MouseButton.LEFT)
+                    }
+                },
+        ) {}
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            MouseButtonButton(MouseButton.LEFT, onButton, Modifier.weight(1f))
+            MouseButtonButton(MouseButton.RIGHT, onButton, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun MouseButtonButton(
+    button: MouseButton,
+    onClick: (MouseButton) -> Unit,
+    modifier: Modifier,
+) {
+    Button(
+        onClick = { onClick(button) },
+        modifier = modifier.height(28.dp),
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    ) {
+        Text(button.label, fontSize = 7.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun KeyboardKeyButton(
+    key: KeyboardKey,
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(32.dp),
+        enabled = key != KeyboardKey.PLACEHOLDER,
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledContainerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Text(text = key.label, fontSize = 7.sp, maxLines = 1)
     }
 }
 
@@ -136,45 +319,41 @@ private fun InfoLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "IMMERSIA",
+                "IMMERSIA",
                 color = MaterialTheme.colorScheme.primary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
+                letterSpacing = 2.sp
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                text = primaryText,
+                primaryText,
                 style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = secondaryText,
+                secondaryText,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge
             )
             Spacer(Modifier.height(28.dp))
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(20.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = statusPrefix,
+                        statusPrefix,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = statusText,
-                    )
+                    Text(statusText)
                 }
             }
             extraContent()
