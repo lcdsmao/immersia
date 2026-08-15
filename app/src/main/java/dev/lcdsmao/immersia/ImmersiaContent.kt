@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 
 @Composable
 fun ImmersiaContent(
@@ -87,8 +88,13 @@ private fun ImmersiveContent(
                     ) { change, dragAmount ->
                         change.consume()
                         val xOffset = dragAmount.x
-                        val delta = if (xOffset > 0) 1 else -1
-                        dragDeltaResult = delta
+                        val yOffset = dragAmount.y
+                        if (abs(xOffset) > abs(yOffset)) {
+                            val delta = if (xOffset > 0) 1 else -1
+                            dragDeltaResult = delta
+                        } else {
+                            dragDeltaResult = 0
+                        }
                     }
                 }
         )
