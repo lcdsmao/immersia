@@ -1,6 +1,7 @@
 package dev.lcdsmao.immersia
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,9 +21,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,6 +38,7 @@ import androidx.compose.ui.unit.sp
 fun ImmersiaContent(
     state: ImmersiaUiState,
     onOpenAccessibilitySettings: () -> Unit,
+    onChangeImmersiveMode: (ImmersiveMode) -> Unit,
 ) {
     when (state) {
         ImmersiaUiState.AccessibilityDisabled -> {
@@ -55,7 +62,7 @@ fun ImmersiaContent(
             )
         }
         is ImmersiaUiState.Immersive -> {
-            ImmersiveContent(state)
+            ImmersiveContent(state, onChangeImmersiveMode)
         }
     }
 }
@@ -63,16 +70,39 @@ fun ImmersiaContent(
 @Composable
 private fun ImmersiveContent(
     state: ImmersiaUiState.Immersive,
+    onChangeImmersiveMode: (ImmersiveMode) -> Unit,
 ) {
-    when (state.mode) {
-        ImmersiveMode.Empty -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        var dragDeltaResult by remember { mutableIntStateOf(0) }
+        Spacer(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .width(120.dp)
+                .height(16.dp)
+                .pointerInput(state.mode) {
+                    detectDragGestures(
+                        onDragEnd = {
+                            onChangeImmersiveMode(ImmersiveMode.entries[(state.mode.ordinal + dragDeltaResult + ImmersiveMode.entries.size) % ImmersiveMode.entries.size])
+                        }
+                    ) { change, dragAmount ->
+                        change.consume()
+                        val xOffset = dragAmount.x
+                        val delta = if (xOffset > 0) 1 else -1
+                        dragDeltaResult = delta
+                    }
+                }
+        )
+
+        when (state.mode) {
+            ImmersiveMode.Empty -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black)
+                )
+            }
+            ImmersiveMode.KeyboardAndMouse -> Text("TBD")
         }
-        ImmersiveMode.KeyboardAndMouse -> Text("TBD")
     }
 }
 

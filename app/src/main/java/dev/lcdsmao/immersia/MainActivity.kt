@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                     onOpenAccessibilitySettings = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
+                    onChangeImmersiveMode = viewModel::changeImmersiveMode,
                 )
             }
         }

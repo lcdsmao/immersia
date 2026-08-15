@@ -58,6 +58,12 @@ class ImmersiaViewModel(
         }
     }
 
+    fun changeImmersiveMode(mode: ImmersiveMode) {
+        updateUiState {
+            (this as? ImmersiaUiState.Immersive)?.copy(mode = mode) ?: this
+        }
+    }
+
     private fun updateEnvironment(
         fullyUnfolded: Boolean = environment.fullyUnfolded,
     ) {
