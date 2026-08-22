@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.annotation.SuppressLint
 import android.content.ComponentName
+import android.content.res.Configuration
 import android.graphics.Path
 import android.graphics.Point
 import android.graphics.Rect
@@ -93,11 +94,16 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
             event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {
-            environmentUpdateJob?.cancel()
-            environmentUpdateJob = launch {
-                delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
-                if (!operationRunning) eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.EnvironmentChanged)
-            }
+            debounceDispatchEnvironmentChange()
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE ||
+            newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
+        ) {
+            debounceDispatchEnvironmentChange()
         }
     }
 
@@ -151,6 +157,14 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         val expected =
             ComponentName(this, ImmersiaAccessibilityService::class.java).flattenToString()
         return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+
+    private fun debounceDispatchEnvironmentChange() {
+        environmentUpdateJob?.cancel()
+        environmentUpdateJob = launch {
+            delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
+            if (!operationRunning) eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.EnvironmentChanged)
+        }
     }
 
     private suspend fun ensureTopBottomSplit() {

@@ -41,10 +41,7 @@ import androidx.compose.ui.unit.sp
 fun ImmersiaContent(
     state: ImmersiaUiState,
     onOpenAccessibilitySettings: () -> Unit,
-    onChangeImmersiveMode: (ImmersiveMode) -> Unit,
-    onKeyboardKey: (KeyboardKey) -> Unit,
-    onMouseMove: (Int, Int) -> Unit,
-    onMouseButton: (MouseButton) -> Unit,
+    onUiEvent: (ImmersiaUiEvent) -> Unit,
 ) {
     when (state) {
         ImmersiaUiState.AccessibilityDisabled -> InfoLayout(
@@ -67,10 +64,7 @@ fun ImmersiaContent(
 
         is ImmersiaUiState.Immersive -> ImmersiveContent(
             state = state,
-            onChangeImmersiveMode = onChangeImmersiveMode,
-            onKeyboardKey = onKeyboardKey,
-            onMouseMove = onMouseMove,
-            onMouseButton = onMouseButton,
+            onUiEvent = onUiEvent,
         )
     }
 }
@@ -78,10 +72,7 @@ fun ImmersiaContent(
 @Composable
 private fun ImmersiveContent(
     state: ImmersiaUiState.Immersive,
-    onChangeImmersiveMode: (ImmersiveMode) -> Unit,
-    onKeyboardKey: (KeyboardKey) -> Unit,
-    onMouseMove: (Int, Int) -> Unit,
-    onMouseButton: (MouseButton) -> Unit,
+    onUiEvent: (ImmersiaUiEvent) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (state.mode) {
@@ -93,9 +84,7 @@ private fun ImmersiveContent(
 
             ImmersiveMode.UnifiedRemote -> KeyboardMouseSurface(
                 state = state,
-                onKeyboardKey = onKeyboardKey,
-                onMouseMove = onMouseMove,
-                onMouseButton = onMouseButton,
+                onUiEvent = onUiEvent,
             )
         }
 
@@ -106,10 +95,12 @@ private fun ImmersiveContent(
                 .height(48.dp)
                 .pointerInput(state.mode) {
                     detectTapGestures(onDoubleTap = {
-                        onChangeImmersiveMode(
-                            ImmersiveMode.entries[
-                                (state.mode.ordinal + 1) % ImmersiveMode.entries.size
-                            ],
+                        onUiEvent(
+                            ImmersiaUiEvent.OnImmersiveModeChange(
+                                ImmersiveMode.entries[
+                                    (state.mode.ordinal + 1) % ImmersiveMode.entries.size
+                                ]
+                            )
                         )
                     })
                 }
@@ -120,9 +111,7 @@ private fun ImmersiveContent(
 @Composable
 private fun KeyboardMouseSurface(
     state: ImmersiaUiState.Immersive,
-    onKeyboardKey: (KeyboardKey) -> Unit,
-    onMouseMove: (Int, Int) -> Unit,
-    onMouseButton: (MouseButton) -> Unit,
+    onUiEvent: (ImmersiaUiEvent) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -165,12 +154,12 @@ private fun KeyboardMouseSurface(
                         keyGap = keyGap,
                         horizontalAlignment = Alignment.Start,
                         heldModifiers = state.heldModifiers,
-                        onKey = onKeyboardKey,
+                        onKey = { onUiEvent(ImmersiaUiEvent.OnKeyboardKey(it)) },
                         modifier = Modifier.weight(1f),
                     )
                     MouseSurface(
-                        onMove = onMouseMove,
-                        onButton = onMouseButton,
+                        onMove = { x, y -> onUiEvent(ImmersiaUiEvent.OnMouseMove(x, y)) },
+                        onButton = { onUiEvent(ImmersiaUiEvent.OnMouseClick(it)) },
                         modifier = Modifier
                             .width(mouseWidth)
                             .fillMaxHeight(),
@@ -181,7 +170,7 @@ private fun KeyboardMouseSurface(
                         keyGap = keyGap,
                         horizontalAlignment = Alignment.End,
                         heldModifiers = state.heldModifiers,
-                        onKey = onKeyboardKey,
+                        onKey = { onUiEvent(ImmersiaUiEvent.OnKeyboardKey(it)) },
                         modifier = Modifier.weight(1f),
                     )
                 }

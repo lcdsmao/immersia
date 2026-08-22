@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ExperimentalMediaQueryApi
 import androidx.compose.ui.UiMediaScope
@@ -43,11 +44,14 @@ class MainActivity : ComponentActivity() {
             val isFlatPosture = mediaQuery {
                 windowPosture == UiMediaScope.Posture.Flat
             }
-            val orientation = LocalConfiguration.current.orientation
-            LifecycleResumeEffect(isFlatPosture, orientation) {
-                viewModel.tryStartImmersive(isFlatPosture)
+            LaunchedEffect(isFlatPosture) {
+                viewModel.onUiEvent(ImmersiaUiEvent.OnPostureChange(isFlatPosture))
+            }
+
+            LifecycleResumeEffect( Unit) {
+                viewModel.onUiEvent(ImmersiaUiEvent.OnResume)
                 onPauseOrDispose {
-                    viewModel.pauseImmersive()
+                    viewModel.onUiEvent(ImmersiaUiEvent.OnPause)
                 }
             }
 
@@ -67,10 +71,7 @@ class MainActivity : ComponentActivity() {
                     onOpenAccessibilitySettings = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
-                    onChangeImmersiveMode = viewModel::changeImmersiveMode,
-                    onKeyboardKey = viewModel::onKeyboardKey,
-                    onMouseMove = viewModel::onMouseMove,
-                    onMouseButton = viewModel::onMouseButton,
+                    onUiEvent = viewModel::onUiEvent,
                 )
             }
         }
