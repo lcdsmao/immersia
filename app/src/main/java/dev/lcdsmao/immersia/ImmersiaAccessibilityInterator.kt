@@ -7,25 +7,23 @@ interface ImmersiaAccessibilityInteractor {
 
     fun beginImmersive()
 
-    fun sendKeyboardStroke(
-        key: KeyboardKey,
-        modifiers: Set<KeyboardKey>,
-    ): UnifiedRemoteClient.Result
+    fun enterKeyboardMode(): KeyboardImeResult
 
-    fun sendMouseMove(deltaX: Int, deltaY: Int): UnifiedRemoteClient.Result
+    fun exitKeyboardMode()
 
-    fun clickMouse(button: MouseButton): UnifiedRemoteClient.Result
+    data class KeyboardImeResult(
+        val success: Boolean,
+        val message: String,
+    )
 
     sealed interface Event {
         object ImmersiveSucceeded : Event
 
         data class ImmersiveFailed(val reason: String) : Event
 
-        data class EnvironmentChanged(
+        data class SettingsChanged(
             val accessibilityEnabled: Boolean = false,
             val serviceReady: Boolean = false,
-            val landscapeReady: Boolean = false,
-            val inSplitMode: Boolean = false,
         ) : Event
     }
 }

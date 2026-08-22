@@ -1,8 +1,10 @@
 package dev.lcdsmao.immersia
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Surface
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
@@ -14,7 +16,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ExperimentalMediaQueryApi
 import androidx.compose.ui.UiMediaScope
 import androidx.compose.ui.mediaQuery
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.initializer
@@ -48,8 +49,9 @@ class MainActivity : ComponentActivity() {
                 viewModel.onUiEvent(ImmersiaUiEvent.OnPostureChange(isFlatPosture))
             }
 
-            LifecycleResumeEffect( Unit) {
+            LifecycleResumeEffect(Unit) {
                 viewModel.onUiEvent(ImmersiaUiEvent.OnResume)
+                dispatchConfigurationChanged()
                 onPauseOrDispose {
                     viewModel.onUiEvent(ImmersiaUiEvent.OnPause)
                 }
@@ -75,5 +77,19 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        dispatchConfigurationChanged()
+    }
+
+    private fun dispatchConfigurationChanged() {
+        viewModel.onUiEvent(
+            ImmersiaUiEvent.OnConfigurationChanged(
+                isLandscape = display?.rotation == Surface.ROTATION_90 || display?.rotation == Surface.ROTATION_270,
+                isInMultiWindowMode = isInMultiWindowMode,
+            )
+        )
     }
 }

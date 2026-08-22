@@ -22,22 +22,16 @@ Immersia will:
 - Convert left/right split-screen to top/bottom when needed.
 - Place Immersia over the camera side.
 - Resize the Immersia pane to approximately 32% of the display.
-- Show the keyboard and mouse companion surface by default.
+- Enable and switch to its local keyboard input method.
+- Place the keyboard input-method window over Immersia's split pane.
 
-The immersive pane includes a split keyboard and central mouse surface. The
-keyboard uses a standard QWERTY layout, with the left and right halves on each
-side of the mouse area. Modifier buttons latch state in the UI only. C and V
-send one combined `stroke` action with the selected modifiers, preventing
-duplicate character events. A held modifier is sent and cleared only when
-tapped again. After a character stroke, the oldest held modifier is consumed;
-for example, `Win+Shift+C` leaves `Shift` held.
-Immersia sends these actions through the documented Unified Remote
-Android broadcast integration, so Unified Remote Server sends them to the
-Windows foreground application. Unified Remote must be installed, paired, and
-connected to the Windows PC. Mouse movement and left/right clicks use Unified
-Remote's `Core.Input` actions.
+The keyboard is a real Android `InputMethodService` with a Compose UI. The
+adjacent app remains the input target and controls whether the IME is shown;
+Immersia only supplies the IME window's size and position. Keys are delivered
+to the target through `InputConnection.sendKeyEvent` with explicit down/up
+events, including held-state and cancellation handling.
 
-Double-tap the black surface to pause immersive mode. The controls return temporarily and immersive mode resumes automatically after three seconds. Use **Exit Immersia** to leave the helper app.
+The adjacent app controls when the IME is shown or hidden. Use **Exit Immersia** to leave the helper app.
 
 ## Build
 
@@ -50,3 +44,7 @@ Install the generated APK from `app/build/outputs/apk/debug/`.
 ## Limitations
 
 Immersia relies on Samsung accessibility UI controls because normal third-party apps cannot directly control another app's split-screen stage or divider ratio. Accessibility labels and Samsung window behavior may change between One UI versions.
+
+The keyboard sends `KeyEvent`s through the focused adjacent app. It does not
+create an Android gamepad `InputDevice`, does not provide analog axes, and
+cannot control an app that does not accept IME input events.

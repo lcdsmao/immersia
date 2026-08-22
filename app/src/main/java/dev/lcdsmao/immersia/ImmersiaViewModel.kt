@@ -36,10 +36,10 @@ class ImmersiaViewModel(
             is ImmersiaUiEvent.OnPostureChange -> viewModelScope.launch {
                 updateEnvironment(fullyUnfolded = event.isFlatPosture)
             }
+            is ImmersiaUiEvent.OnConfigurationChanged -> viewModelScope.launch {
+                updateEnvironment(landscapeReady = event.isLandscape, inSplitMode = event.isInMultiWindowMode)
+            }
             is ImmersiaUiEvent.OnImmersiveModeChange -> changeImmersiveMode(event.mode)
-            is ImmersiaUiEvent.OnKeyboardKey -> onKeyboardKey(event.key)
-            is ImmersiaUiEvent.OnMouseClick -> onMouseClick(event.button)
-            is ImmersiaUiEvent.OnMouseMove -> onMouseMove(event.deltaX, event.deltaY)
             ImmersiaUiEvent.OnResume -> onResume()
             ImmersiaUiEvent.OnPause -> onPause()
         }
@@ -51,8 +51,8 @@ class ImmersiaViewModel(
         accessibilityEventJob = viewModelScope.launch {
             interactor.eventFlow.collectLatest { event ->
                 when (event) {
-                    is ImmersiaAccessibilityInteractor.Event.EnvironmentChanged -> updateEnvironment(
-                        environmentChanged = event,
+                    is ImmersiaAccessibilityInteractor.Event.SettingsChanged -> updateEnvironment(
+                        settingsChanged = event,
                     )
                     is ImmersiaAccessibilityInteractor.Event.ImmersiveFailed -> onImmersiveFailed(
                         event.reason,
@@ -64,6 +64,7 @@ class ImmersiaViewModel(
     }
 
     private fun onPause() {
+        immersiveInteractor()?.exitKeyboardMode()
         accessibilityEventJob?.cancel()
         accessibilityEventJob = null
         immersiveJob?.cancel()
@@ -88,30 +89,36 @@ class ImmersiaViewModel(
 
     private fun changeImmersiveMode(mode: ImmersiveMode) {
         updateUiState { (this as? ImmersiaUiState.Immersive)?.copy(mode = mode) ?: this }
-    }
-
-    private fun updateImmersiveMessage(message: String) {
-        updateUiState {
-            (this as? ImmersiaUiState.Immersive)?.copy(message = message) ?: this
+        when (mode) {
+            ImmersiveMode.Keyboard -> immersiveInteractor()?.enterKeyboardMode()
+            ImmersiveMode.Default -> immersiveInteractor()?.exitKeyboardMode()
         }
     }
 
     private suspend fun updateEnvironment(
-        environmentChanged: ImmersiaAccessibilityInteractor.Event.EnvironmentChanged? = null,
+        settingsChanged: ImmersiaAccessibilityInteractor.Event.SettingsChanged? = null,
         fullyUnfolded: Boolean? = null,
+        landscapeReady: Boolean? = null,
+        inSplitMode: Boolean? = null,
     ) {
         environment = Environment(
-            accessibilityEnabled = environmentChanged?.accessibilityEnabled ?: environment.accessibilityEnabled,
-            serviceReady = environmentChanged?.serviceReady ?: environment.serviceReady,
+            accessibilityEnabled = settingsChanged?.accessibilityEnabled
+                ?: environment.accessibilityEnabled,
+            serviceReady = settingsChanged?.serviceReady ?: environment.serviceReady,
             fullyUnfolded = fullyUnfolded ?: environment.fullyUnfolded,
-            landscapeReady = environmentChanged?.landscapeReady ?: environment.landscapeReady,
-            inSplitMode = environmentChanged?.inSplitMode ?: environment.inSplitMode,
+            landscapeReady = landscapeReady ?: environment.landscapeReady,
+            inSplitMode = inSplitMode ?: environment.inSplitMode,
         )
         delay(ENVIRONMENT_UI_UPDATE_DELAY)
         when {
-            !environment.accessibilityEnabled -> updateUiState { ImmersiaUiState.AccessibilityDisabled }
-            !isEnvironmentReady() -> updateUiState {
-                ImmersiaUiState.Preparation(environmentMessage())
+            !environment.accessibilityEnabled -> {
+                updateUiState { ImmersiaUiState.AccessibilityDisabled }
+            }
+            !isEnvironmentReady() -> {
+                if (uiState is ImmersiaUiState.Immersive) {
+                    immersiveInteractor()?.exitKeyboardMode()
+                }
+                updateUiState { ImmersiaUiState.Preparation(environmentMessage()) }
             }
             else -> if (uiState !is ImmersiaUiState.Immersive && immersiveJob?.isActive != true) {
                 startImmersiveJob()
@@ -123,7 +130,8 @@ class ImmersiaViewModel(
         immersiveJob?.cancel()
         immersiveJob = null
         updateUiState {
-            this as? ImmersiaUiState.Immersive ?: ImmersiaUiState.Immersive(ImmersiveMode.Empty)
+            this as? ImmersiaUiState.Immersive
+                ?: ImmersiaUiState.Immersive(ImmersiveMode.Default)
         }
     }
 
@@ -145,53 +153,6 @@ class ImmersiaViewModel(
                 environment.fullyUnfolded &&
                 environment.landscapeReady &&
                 environment.inSplitMode
-
-
-    private fun onKeyboardKey(key: KeyboardKey) {
-        val interactor = immersiveInteractor() ?: return
-        val immersive = uiState as? ImmersiaUiState.Immersive ?: return
-        if (key.isModifier) {
-            val wasHeld = key in immersive.heldModifiers
-            val nextModifiers =
-                if (wasHeld) immersive.heldModifiers - key else immersive.heldModifiers + key
-            updateUiState {
-                immersive.copy(
-                    heldModifiers = nextModifiers,
-                    message = if (wasHeld) "Sending ${key.label}." else "${key.label} held.",
-                )
-            }
-            if (wasHeld) interactor.sendKeyboardStroke(key, emptySet())
-            return
-        }
-
-        val modifiers = immersive.heldModifiers
-        updateUiState {
-            immersive.copy(
-                message = "Sending ${
-                    modifiers.joinToString("+") { it.label }.let { prefix ->
-                        if (prefix.isEmpty()) key.label else "$prefix+${key.label}"
-                    }
-                }.",
-            )
-        }
-        interactor.sendKeyboardStroke(key, modifiers)
-        if (modifiers.isNotEmpty()) {
-            val consumed = KeyboardKey.entries.first { it in modifiers }
-            updateUiState {
-                (this as ImmersiaUiState.Immersive).copy(heldModifiers = modifiers - consumed)
-            }
-        }
-    }
-
-    private fun onMouseMove(deltaX: Int, deltaY: Int) {
-        val result = immersiveInteractor()?.sendMouseMove(deltaX, deltaY) ?: return
-        updateImmersiveMessage(result.message)
-    }
-
-    private fun onMouseClick(button: MouseButton) {
-        val result = immersiveInteractor()?.clickMouse(button) ?: return
-        updateImmersiveMessage(result.message)
-    }
 
     private fun updateUiState(update: ImmersiaUiState.() -> ImmersiaUiState) {
         uiState = uiState.update()

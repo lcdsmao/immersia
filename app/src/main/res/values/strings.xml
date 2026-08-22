@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Immersia</string>
     <string name="immersia_accessibility_description">Accessibility controls for Immersia</string>
+    <string name="immersia_keyboard_name">Immersia Keyboard</string>
 </resources>

@@ -1,6 +1,6 @@
 package dev.lcdsmao.immersia
 
 enum class ImmersiveMode {
-    Empty,
-    UnifiedRemote,
+    Default,
+    Keyboard,
 }

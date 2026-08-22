@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.graphics.Path
 import android.graphics.Point
 import android.graphics.Rect
+import android.view.inputmethod.InputMethodManager
 import android.provider.Settings
 import android.view.Display
 import android.view.Surface
@@ -68,7 +69,8 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     private var environmentUpdateJob: Job? = null
     private var operationJob: Job? = null
-    private val unifiedRemoteClient by lazy { UnifiedRemoteClient(this) }
+    private var immersiveBounds: Rect? = null
+    private var previousImeId: String? = null
 
     private val operationRunning get() = operationJob?.isActive == true
 
@@ -80,16 +82,15 @@ class ImmersiaAccessibilityService : AccessibilityService(),
     override fun onServiceConnected() {
         instance = this
         eventFlow.tryEmit(
-            ImmersiaAccessibilityInteractor.Event.EnvironmentChanged(
+            ImmersiaAccessibilityInteractor.Event.SettingsChanged(
                 accessibilityEnabled = isAccessibilityEnabled(),
                 serviceReady = false,
-                landscapeReady = isLandscapeDisplay(),
-                inSplitMode = isInSplitMode(),
             )
         )
     }
 
     override fun onDestroy() {
+        exitKeyboardMode()
         coroutineContext.cancel()
         if (instance === this) instance = null
         super.onDestroy()
@@ -116,24 +117,10 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onInterrupt() = Unit
 
-    private fun isInSplitMode(): Boolean = findSplitPair() != null
-
-    private fun isLandscapeDisplay(): Boolean {
-        val display = displayProvider?.display() ?: return false
-        return display.rotation == Surface.ROTATION_90 || display.rotation == Surface.ROTATION_270
-    }
-
     override fun beginImmersive() {
         if (operationRunning) return
         operationJob = launch {
             try {
-                if (!isInSplitMode()) {
-                    throw InteractionException("Create a split screen with your video app and Immersia first.")
-                }
-                if (!isLandscapeDisplay()) {
-                    throw InteractionException("The system has not applied a landscape display layout. Rotate the device or use the system rotation control, then try again.")
-                }
-
                 ensureTopBottomSplit()
             } catch (e: InteractionException) {
                 eventFlow.tryEmit(
@@ -145,16 +132,59 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         }
     }
 
-    override fun sendKeyboardStroke(
-        key: KeyboardKey,
-        modifiers: Set<KeyboardKey>,
-    ): UnifiedRemoteClient.Result = unifiedRemoteClient.sendStroke(key, modifiers)
+    override fun enterKeyboardMode(): ImmersiaAccessibilityInteractor.KeyboardImeResult {
+        val bounds = immersiveBounds ?: return ImmersiaAccessibilityInteractor.KeyboardImeResult(
+            success = false,
+            message = "Immersia's split-pane bounds are not ready.",
+        )
+        val imeId = ComponentName(this, ImmersiaInputMethodService::class.java)
+            .flattenToShortString()
+        val inputMethodManager = getSystemService<InputMethodManager>()
+            ?: return ImmersiaAccessibilityInteractor.KeyboardImeResult(
+                success = false,
+                message = "Android's input method manager is unavailable.",
+            )
+        val currentIme = inputMethodManager.currentInputMethodInfo?.id
+        if (currentIme != imeId) previousImeId = currentIme
 
-    override fun sendMouseMove(deltaX: Int, deltaY: Int): UnifiedRemoteClient.Result =
-        unifiedRemoteClient.sendMouseMove(deltaX, deltaY)
+        val controller = softKeyboardController
+        if (inputMethodManager.enabledInputMethodList.none { it.id == imeId }) {
+            val result = controller.setInputMethodEnabled(imeId, true)
+            if (result != SoftKeyboardController.ENABLE_IME_SUCCESS) {
+                return ImmersiaAccessibilityInteractor.KeyboardImeResult(
+                    success = false,
+                    message = "Android did not allow Immersia Keyboard to be enabled.",
+                )
+            }
+        }
+        if (currentIme != imeId && !controller.switchToInputMethod(imeId)) {
+            return ImmersiaAccessibilityInteractor.KeyboardImeResult(
+                success = false,
+                message = "Android did not switch to Immersia Keyboard.",
+            )
+        }
 
-    override fun clickMouse(button: MouseButton): UnifiedRemoteClient.Result =
-        unifiedRemoteClient.clickMouse(button)
+        KeyboardImeState.setOverlayBounds(bounds)
+        return ImmersiaAccessibilityInteractor.KeyboardImeResult(
+            success = true,
+            message = if (KeyboardImeState.ready) {
+                "Immersia Keyboard is ready."
+            } else {
+                "Immersia Keyboard is starting."
+            },
+        )
+    }
+
+    override fun exitKeyboardMode() {
+        KeyboardImeState.reset()
+        val imeId = ComponentName(this, ImmersiaInputMethodService::class.java)
+            .flattenToShortString()
+        val currentIme = getSystemService<InputMethodManager>()?.currentInputMethodInfo?.id
+        if (currentIme == imeId) {
+            previousImeId?.let { softKeyboardController.switchToInputMethod(it) }
+        }
+        previousImeId = null
+    }
 
     private fun isAccessibilityEnabled(): Boolean {
         val enabled = Settings.Secure.getString(
@@ -172,11 +202,9 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
             if (!operationRunning) {
                 eventFlow.tryEmit(
-                    ImmersiaAccessibilityInteractor.Event.EnvironmentChanged(
+                    ImmersiaAccessibilityInteractor.Event.SettingsChanged(
                         accessibilityEnabled = isAccessibilityEnabled(),
                         serviceReady = true,
-                        landscapeReady = isLandscapeDisplay(),
-                        inSplitMode = isInSplitMode(),
                     )
                 )
             }
@@ -271,6 +299,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             .coerceIn(display.top + SAFE_MARGIN, display.bottom - SAFE_MARGIN)
 
         if (abs(divider.y - targetY) < BOUNDARY_TOLERANCE) {
+            immersiveBounds = Rect(ours.bounds)
             eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
             return
         }
@@ -288,6 +317,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             finalOurs.bounds.contains(finalCamera.x, finalCamera.y) &&
             finalRatio != null && abs(finalRatio - (1f - VIDEO_RATIO)) < RATIO_TOLERANCE
         ) {
+            immersiveBounds = Rect(finalOurs.bounds)
             eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
         } else {
             throw InteractionException("The split divider did not reach the requested immersive ratio.")
