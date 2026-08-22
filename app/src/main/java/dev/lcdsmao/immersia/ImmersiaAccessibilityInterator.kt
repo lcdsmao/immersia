@@ -5,12 +5,6 @@ import kotlinx.coroutines.flow.Flow
 interface ImmersiaAccessibilityInteractor {
     val eventFlow: Flow<Event>
 
-    fun isAccessibilityEnabled(): Boolean
-
-    fun isInSplitMode(): Boolean
-
-    fun isLandscapeDisplay(): Boolean
-
     fun beginImmersive()
 
     fun sendKeyboardStroke(
@@ -27,6 +21,11 @@ interface ImmersiaAccessibilityInteractor {
 
         data class ImmersiveFailed(val reason: String) : Event
 
-        object EnvironmentChanged : Event
+        data class EnvironmentChanged(
+            val accessibilityEnabled: Boolean = false,
+            val serviceReady: Boolean = false,
+            val landscapeReady: Boolean = false,
+            val inSplitMode: Boolean = false,
+        ) : Event
     }
 }

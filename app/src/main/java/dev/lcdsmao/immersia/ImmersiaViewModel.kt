@@ -34,7 +34,7 @@ class ImmersiaViewModel(
     fun onUiEvent(event: ImmersiaUiEvent) {
         when (event) {
             is ImmersiaUiEvent.OnPostureChange -> viewModelScope.launch {
-                updateEnvironment(event.isFlatPosture)
+                updateEnvironment(fullyUnfolded = event.isFlatPosture)
             }
             is ImmersiaUiEvent.OnImmersiveModeChange -> changeImmersiveMode(event.mode)
             is ImmersiaUiEvent.OnKeyboardKey -> onKeyboardKey(event.key)
@@ -51,9 +51,11 @@ class ImmersiaViewModel(
         accessibilityEventJob = viewModelScope.launch {
             interactor.eventFlow.collectLatest { event ->
                 when (event) {
-                    ImmersiaAccessibilityInteractor.Event.EnvironmentChanged -> updateEnvironment()
+                    is ImmersiaAccessibilityInteractor.Event.EnvironmentChanged -> updateEnvironment(
+                        environmentChanged = event,
+                    )
                     is ImmersiaAccessibilityInteractor.Event.ImmersiveFailed -> onImmersiveFailed(
-                        event.reason
+                        event.reason,
                     )
                     ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded -> onImmersiveSucceeded()
                 }
@@ -94,14 +96,16 @@ class ImmersiaViewModel(
         }
     }
 
-    private suspend fun updateEnvironment(fullyUnfolded: Boolean = environment.fullyUnfolded) {
-        val interactor = immersiveInteractor()
+    private suspend fun updateEnvironment(
+        environmentChanged: ImmersiaAccessibilityInteractor.Event.EnvironmentChanged? = null,
+        fullyUnfolded: Boolean? = null,
+    ) {
         environment = Environment(
-            accessibilityEnabled = interactor?.isAccessibilityEnabled() == true,
-            serviceReady = interactor != null,
-            fullyUnfolded = fullyUnfolded,
-            landscapeReady = interactor?.isLandscapeDisplay() == true,
-            inSplitMode = interactor?.isInSplitMode() == true,
+            accessibilityEnabled = environmentChanged?.accessibilityEnabled ?: environment.accessibilityEnabled,
+            serviceReady = environmentChanged?.serviceReady ?: environment.serviceReady,
+            fullyUnfolded = fullyUnfolded ?: environment.fullyUnfolded,
+            landscapeReady = environmentChanged?.landscapeReady ?: environment.landscapeReady,
+            inSplitMode = environmentChanged?.inSplitMode ?: environment.inSplitMode,
         )
         delay(ENVIRONMENT_UI_UPDATE_DELAY)
         when {
@@ -137,8 +141,10 @@ class ImmersiaViewModel(
     }
 
     private fun isEnvironmentReady() =
-        environment.accessibilityEnabled && environment.serviceReady &&
-                environment.fullyUnfolded && environment.landscapeReady && environment.inSplitMode
+        environment.accessibilityEnabled &&
+                environment.fullyUnfolded &&
+                environment.landscapeReady &&
+                environment.inSplitMode
 
 
     private fun onKeyboardKey(key: KeyboardKey) {

@@ -79,7 +79,14 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onServiceConnected() {
         instance = this
-        eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.EnvironmentChanged)
+        eventFlow.tryEmit(
+            ImmersiaAccessibilityInteractor.Event.EnvironmentChanged(
+                accessibilityEnabled = isAccessibilityEnabled(),
+                serviceReady = false,
+                landscapeReady = isLandscapeDisplay(),
+                inSplitMode = isInSplitMode(),
+            )
+        )
     }
 
     override fun onDestroy() {
@@ -109,9 +116,9 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onInterrupt() = Unit
 
-    override fun isInSplitMode(): Boolean = findSplitPair() != null
+    private fun isInSplitMode(): Boolean = findSplitPair() != null
 
-    override fun isLandscapeDisplay(): Boolean {
+    private fun isLandscapeDisplay(): Boolean {
         val display = displayProvider?.display() ?: return false
         return display.rotation == Surface.ROTATION_90 || display.rotation == Surface.ROTATION_270
     }
@@ -149,7 +156,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
     override fun clickMouse(button: MouseButton): UnifiedRemoteClient.Result =
         unifiedRemoteClient.clickMouse(button)
 
-    override fun isAccessibilityEnabled(): Boolean {
+    private fun isAccessibilityEnabled(): Boolean {
         val enabled = Settings.Secure.getString(
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
@@ -163,7 +170,16 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         environmentUpdateJob?.cancel()
         environmentUpdateJob = launch {
             delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
-            if (!operationRunning) eventFlow.tryEmit(ImmersiaAccessibilityInteractor.Event.EnvironmentChanged)
+            if (!operationRunning) {
+                eventFlow.tryEmit(
+                    ImmersiaAccessibilityInteractor.Event.EnvironmentChanged(
+                        accessibilityEnabled = isAccessibilityEnabled(),
+                        serviceReady = true,
+                        landscapeReady = isLandscapeDisplay(),
+                        inSplitMode = isInSplitMode(),
+                    )
+                )
+            }
         }
     }
 
