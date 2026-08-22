@@ -1,6 +1,8 @@
 package dev.lcdsmao.immersia
 
 import android.content.Context
+import android.content.res.Configuration
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -22,16 +24,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateSet
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 internal class KeyboardImeView(context: Context) : AbstractComposeView(context) {
     var keyState: KeyboardKeyState? by mutableStateOf(null)
@@ -46,9 +52,23 @@ internal class KeyboardImeView(context: Context) : AbstractComposeView(context) 
 
 @Composable
 private fun KeyboardImeContent(keyState: KeyboardKeyState) {
+    ImmersiaTheme {
+        KeyboardImeContent(
+            pressedKeys = keyState.pressedKeys,
+            onKeyPress = { keyState.press(it) },
+            onKeyRelease = { keyState.release(it) },
+        )
+    }
+}
+
+@Composable
+private fun KeyboardImeContent(
+    pressedKeys: SnapshotStateSet<Int>,
+    onKeyPress: (Int) -> Unit,
+    onKeyRelease: (Int) -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0C0F16),
     ) {
         BoxWithConstraints(
             modifier = Modifier
@@ -75,7 +95,9 @@ private fun KeyboardImeContent(keyState: KeyboardKeyState) {
                     keyWidth = keyWidth,
                     keyGap = keyGap,
                     horizontalAlignment = Alignment.Start,
-                    keyState = keyState,
+                    pressedKeys = pressedKeys,
+                    onKeyPress = onKeyPress,
+                    onKeyRelease = onKeyRelease,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(
@@ -88,7 +110,9 @@ private fun KeyboardImeContent(keyState: KeyboardKeyState) {
                     keyWidth = keyWidth,
                     keyGap = keyGap,
                     horizontalAlignment = Alignment.End,
-                    keyState = keyState,
+                    pressedKeys = pressedKeys,
+                    onKeyPress = onKeyPress,
+                    onKeyRelease = onKeyRelease,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -102,7 +126,9 @@ private fun KeyboardImeHalf(
     keyWidth: Dp,
     keyGap: Dp,
     horizontalAlignment: Alignment.Horizontal,
-    keyState: KeyboardKeyState,
+    pressedKeys: SnapshotStateSet<Int>,
+    onKeyPress: (Int) -> Unit,
+    onKeyRelease: (Int) -> Unit,
     modifier: Modifier,
 ) {
     Column(
@@ -113,11 +139,12 @@ private fun KeyboardImeHalf(
         rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(keyGap)) {
                 row.forEach { key ->
-                    KeyboardImeKey(
-                        key = key,
-                        active = key.keyCode in keyState.pressedKeys,
-                        onPress = { keyState.press(key.keyCode) },
-                        onRelease = { keyState.release(key.keyCode) },
+                    ImeKey(
+                        label = key.label,
+                        keyCode = key.keyCode,
+                        active = key.keyCode in pressedKeys,
+                        onPress = { onKeyPress(key.keyCode) },
+                        onRelease = { onKeyRelease(key.keyCode) },
                         modifier = Modifier
                             .width(keyWidth)
                             .height(32.dp)
@@ -130,8 +157,9 @@ private fun KeyboardImeHalf(
 }
 
 @Composable
-private fun KeyboardImeKey(
-    key: KeyboardKey,
+private fun ImeKey(
+    label: String,
+    keyCode: Int,
     active: Boolean,
     onPress: () -> Unit,
     onRelease: () -> Unit,
@@ -141,13 +169,13 @@ private fun KeyboardImeKey(
         modifier = modifier
             .background(
                 color = when {
-                    key == KeyboardKey.PLACEHOLDER -> Color.Transparent
+                    keyCode == KeyEvent.KEYCODE_UNKNOWN -> MaterialTheme.colorScheme.surface
                     active -> MaterialTheme.colorScheme.primary
-                    else -> Color(0xFF283040)
+                    else -> MaterialTheme.colorScheme.surfaceVariant
                 },
                 shape = RoundedCornerShape(6.dp),
             )
-            .pointerInput(key) {
+            .pointerInput(keyCode) {
                 detectTapGestures(
                     onPress = {
                         onPress()
@@ -162,11 +190,24 @@ private fun KeyboardImeKey(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = key.label,
-            color = Color.White,
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 9.sp,
             maxLines = 1,
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Preview(widthDp = 800, heightDp = 400, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun KeyboardImeContentPreview() {
+    ImmersiaTheme {
+        val set = remember { mutableStateSetOf<Int>() }
+        KeyboardImeContent(
+            pressedKeys = set,
+            onKeyPress = { set.add(it) },
+            onKeyRelease = { set.remove(it) },
         )
     }
 }

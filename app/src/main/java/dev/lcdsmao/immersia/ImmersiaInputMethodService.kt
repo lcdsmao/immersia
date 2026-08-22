@@ -106,6 +106,7 @@ class ImmersiaInputMethodService : InputMethodService(),
         restarting: Boolean,
     ) {
         super.onStartInputView(editorInfo, restarting)
+        lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         setCandidatesViewShown(false)
         applyOverlayBounds()
     }
@@ -113,6 +114,7 @@ class ImmersiaInputMethodService : InputMethodService(),
     override fun onFinishInputView(finishingInput: Boolean) {
         keyState.releaseAll()
         KeyboardImeState.setReady(false)
+        lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         super.onFinishInputView(finishingInput)
     }
 

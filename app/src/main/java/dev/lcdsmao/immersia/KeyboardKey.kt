@@ -5,7 +5,6 @@ import android.view.KeyEvent
 enum class KeyboardKey(
     val label: String,
     val keyCode: Int,
-    val isModifier: Boolean = false,
 ) {
     ESC("Esc", KeyEvent.KEYCODE_ESCAPE),
     GRAVE("~", KeyEvent.KEYCODE_GRAVE),
@@ -49,7 +48,7 @@ enum class KeyboardKey(
     SEMICOLON(";", KeyEvent.KEYCODE_SEMICOLON),
     APOSTROPHE("'", KeyEvent.KEYCODE_APOSTROPHE),
     ENTER("Enter", KeyEvent.KEYCODE_ENTER),
-    LEFT_SHIFT("Shift", KeyEvent.KEYCODE_SHIFT_LEFT, true),
+    LEFT_SHIFT("Shift", KeyEvent.KEYCODE_SHIFT_LEFT),
     Z("Z", KeyEvent.KEYCODE_Z),
     X("X", KeyEvent.KEYCODE_X),
     C("C", KeyEvent.KEYCODE_C),
@@ -60,17 +59,18 @@ enum class KeyboardKey(
     COMMA(",", KeyEvent.KEYCODE_COMMA),
     PERIOD(".", KeyEvent.KEYCODE_PERIOD),
     SLASH("/", KeyEvent.KEYCODE_SLASH),
-    RIGHT_SHIFT("Shift", KeyEvent.KEYCODE_SHIFT_RIGHT, true),
-    LEFT_CTRL("Ctrl", KeyEvent.KEYCODE_CTRL_LEFT, true),
-    LEFT_WIN("Win", KeyEvent.KEYCODE_META_LEFT, true),
-    LEFT_ALT("Alt", KeyEvent.KEYCODE_ALT_LEFT, true),
+    RIGHT_SHIFT("Shift", KeyEvent.KEYCODE_SHIFT_RIGHT),
+    LEFT_CTRL("Ctrl", KeyEvent.KEYCODE_CTRL_LEFT),
+    LEFT_WIN("Win", KeyEvent.KEYCODE_META_LEFT),
+    LEFT_ALT("Alt", KeyEvent.KEYCODE_ALT_LEFT),
     SPACE("Space", KeyEvent.KEYCODE_SPACE),
-    RIGHT_ALT("Alt", KeyEvent.KEYCODE_ALT_RIGHT, true),
-    RIGHT_CTRL("Ctrl", KeyEvent.KEYCODE_CTRL_RIGHT, true),
+    RIGHT_ALT("Alt", KeyEvent.KEYCODE_ALT_RIGHT),
+    RIGHT_CTRL("Ctrl", KeyEvent.KEYCODE_CTRL_RIGHT),
     LEFT("<", KeyEvent.KEYCODE_DPAD_LEFT),
     RIGHT(">", KeyEvent.KEYCODE_DPAD_RIGHT),
     UP("^", KeyEvent.KEYCODE_DPAD_UP),
     DOWN("v", KeyEvent.KEYCODE_DPAD_DOWN),
+    FUNCTION("FN", KeyEvent.KEYCODE_FUNCTION),
     PLACEHOLDER("", KeyEvent.KEYCODE_UNKNOWN);
 
     companion object {
@@ -79,15 +79,15 @@ enum class KeyboardKey(
             listOf(TAB, Q, W, E, R, T),
             listOf(CAPS, A, S, D, F, G),
             listOf(LEFT_SHIFT, Z, X, C, V, B),
-            listOf(LEFT_CTRL, LEFT_WIN, LEFT_ALT, PLACEHOLDER, GRAVE, SPACE),
+            listOf(LEFT_CTRL, LEFT_WIN, LEFT_ALT, FUNCTION, GRAVE, SPACE),
         )
 
         val rightHalf = listOf(
             listOf(SIX, SEVEN, EIGHT, NINE, ZERO, MINUS, EQUAL),
             listOf(Y, U, I, O, P, LEFT_BRACKET, RIGHT_BRACKET),
             listOf(H, J, K, L, SEMICOLON, APOSTROPHE, BACKSLASH),
-            listOf(N, M, COMMA, PERIOD, SLASH, UP, PLACEHOLDER),
-            listOf(ENTER, BACKSPACE, PLACEHOLDER, PLACEHOLDER, LEFT, DOWN, RIGHT),
+            listOf(N, M, COMMA, PERIOD, SLASH, UP, RIGHT_SHIFT),
+            listOf(ENTER, BACKSPACE, RIGHT_ALT, RIGHT_CTRL, LEFT, DOWN, RIGHT),
         )
     }
 }
