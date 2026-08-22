@@ -37,7 +37,10 @@ class ImmersiaViewModel(
                 updateEnvironment(fullyUnfolded = event.isFlatPosture)
             }
             is ImmersiaUiEvent.OnConfigurationChanged -> viewModelScope.launch {
-                updateEnvironment(landscapeReady = event.isLandscape, inSplitMode = event.isInMultiWindowMode)
+                updateEnvironment(
+                    landscapeReady = event.isLandscape,
+                    inSplitMode = event.isInMultiWindowMode
+                )
             }
             is ImmersiaUiEvent.OnImmersiveModeChange -> changeImmersiveMode(event.mode)
             ImmersiaUiEvent.OnResume -> onResume()
@@ -109,18 +112,21 @@ class ImmersiaViewModel(
             landscapeReady = landscapeReady ?: environment.landscapeReady,
             inSplitMode = inSplitMode ?: environment.inSplitMode,
         )
-        delay(ENVIRONMENT_UI_UPDATE_DELAY)
+        val isCurrentUiStateImmersive = uiState is ImmersiaUiState.Immersive
+        if (isCurrentUiStateImmersive) {
+            delay(ENVIRONMENT_UI_UPDATE_DELAY)
+        }
         when {
             !environment.accessibilityEnabled -> {
                 updateUiState { ImmersiaUiState.AccessibilityDisabled }
             }
             !isEnvironmentReady() -> {
-                if (uiState is ImmersiaUiState.Immersive) {
+                if (isCurrentUiStateImmersive) {
                     immersiveInteractor()?.exitKeyboardMode()
                 }
                 updateUiState { ImmersiaUiState.Preparation(environmentMessage()) }
             }
-            else -> if (uiState !is ImmersiaUiState.Immersive && immersiveJob?.isActive != true) {
+            else -> if (!isCurrentUiStateImmersive && immersiveJob?.isActive != true) {
                 startImmersiveJob()
             }
         }

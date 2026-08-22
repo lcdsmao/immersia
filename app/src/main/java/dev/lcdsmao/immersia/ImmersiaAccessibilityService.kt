@@ -106,15 +106,6 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         }
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE ||
-            newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
-        ) {
-            debounceDispatchEnvironmentChange()
-        }
-    }
-
     override fun onInterrupt() = Unit
 
     override fun beginImmersive() {
