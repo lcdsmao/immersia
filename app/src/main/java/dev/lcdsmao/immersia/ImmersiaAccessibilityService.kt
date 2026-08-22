@@ -124,6 +124,14 @@ class ImmersiaAccessibilityService : AccessibilityService(),
     }
 
     override fun enterKeyboardMode(): ImmersiaAccessibilityInteractor.KeyboardImeResult {
+        return enterImeMode(ImmersiveMode.Keyboard)
+    }
+
+    override fun enterGamepadMode(): ImmersiaAccessibilityInteractor.KeyboardImeResult {
+        return enterImeMode(ImmersiveMode.Gamepad)
+    }
+
+    private fun enterImeMode(mode: ImmersiveMode): ImmersiaAccessibilityInteractor.KeyboardImeResult {
         val bounds = immersiveBounds ?: return ImmersiaAccessibilityInteractor.KeyboardImeResult(
             success = false,
             message = "Immersia's split-pane bounds are not ready.",
@@ -155,6 +163,8 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             )
         }
 
+        ImmersiaInputMethodService.instance?.releaseAllPressedKeys()
+        KeyboardImeState.setMode(mode)
         KeyboardImeState.setOverlayBounds(bounds)
         return ImmersiaAccessibilityInteractor.KeyboardImeResult(
             success = true,

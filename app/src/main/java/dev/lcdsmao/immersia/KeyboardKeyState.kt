@@ -8,7 +8,8 @@ internal class KeyboardKeyState(
     private val dispatch: (KeyEvent) -> Boolean,
 ) {
     private val pressedAt = LinkedHashMap<Int, Long>()
-    val pressedKeys = mutableStateSetOf<Int>()
+    val pressedKeys: Set<Int>
+        field = mutableStateSetOf<Int>()
 
     fun press(keyCode: Int) {
         if (keyCode == KeyEvent.KEYCODE_UNKNOWN || pressedAt.containsKey(keyCode)) return

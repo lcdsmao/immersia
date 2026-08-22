@@ -4,6 +4,10 @@ import android.graphics.Rect
 
 object KeyboardImeState {
     @Volatile
+    var mode: ImmersiveMode = ImmersiveMode.Keyboard
+        private set
+
+    @Volatile
     var overlayBounds: Rect? = null
         private set
 
@@ -16,8 +20,14 @@ object KeyboardImeState {
         ImmersiaInputMethodService.instance?.applyOverlayBounds()
     }
 
+    fun setMode(mode: ImmersiveMode) {
+        this.mode = mode
+        ImmersiaInputMethodService.instance?.setMode(mode)
+    }
+
     fun reset() {
         ImmersiaInputMethodService.instance?.releaseAllPressedKeys()
+        mode = ImmersiveMode.Keyboard
         overlayBounds = null
         ready = false
     }

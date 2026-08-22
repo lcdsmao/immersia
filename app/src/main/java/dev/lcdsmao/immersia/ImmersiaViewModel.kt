@@ -94,6 +94,7 @@ class ImmersiaViewModel(
         updateUiState { (this as? ImmersiaUiState.Immersive)?.copy(mode = mode) ?: this }
         when (mode) {
             ImmersiveMode.Keyboard -> immersiveInteractor()?.enterKeyboardMode()
+            ImmersiveMode.Gamepad -> immersiveInteractor()?.enterGamepadMode()
             ImmersiveMode.Default -> immersiveInteractor()?.exitKeyboardMode()
         }
     }

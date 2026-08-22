@@ -23,6 +23,8 @@ class ImmersiaInputMethodService : InputMethodService(),
     ViewModelStoreOwner,
     SavedStateRegistryOwner {
     private lateinit var keyState: KeyboardKeyState
+    private var mode = ImmersiveMode.Keyboard
+    private var inputView: KeyboardImeView? = null
 
     companion object {
         @Volatile
@@ -59,7 +61,10 @@ class ImmersiaInputMethodService : InputMethodService(),
     }
 
     override fun onCreateInputView(): View = KeyboardImeView(this).also {
+        inputView = it
         it.keyState = keyState
+        mode = KeyboardImeState.mode
+        it.mode = KeyboardImeState.mode
         window?.window?.decorView?.let { decorView ->
             decorView.setViewTreeLifecycleOwner(this)
             decorView.setViewTreeViewModelStoreOwner(this)
@@ -134,6 +139,7 @@ class ImmersiaInputMethodService : InputMethodService(),
         keyState.releaseAll()
         KeyboardImeState.setReady(false)
         if (instance === this) instance = null
+        inputView = null
         lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         super.onDestroy()
     }
@@ -144,6 +150,11 @@ class ImmersiaInputMethodService : InputMethodService(),
 
     fun releaseAllPressedKeys() {
         keyState.releaseAll()
+    }
+
+    fun setMode(mode: ImmersiveMode) {
+        this.mode = mode
+        inputView?.mode = mode
     }
 
     private fun applyOverlayBounds(window: Window) {

@@ -27,7 +27,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateSet
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -40,32 +39,25 @@ import androidx.compose.ui.unit.sp
 import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 internal class KeyboardImeView(context: Context) : AbstractComposeView(context) {
-    var keyState: KeyboardKeyState? by mutableStateOf(null)
+    lateinit var keyState: KeyboardKeyState
+
+    var mode: ImmersiveMode by mutableStateOf(ImmersiveMode.Keyboard)
 
     @Composable
     override fun Content() {
-        keyState?.let {
-            KeyboardImeContent(it)
+        ImmersiaTheme {
+            when (mode) {
+                ImmersiveMode.Keyboard -> KeyboardImeContent(keyState)
+                ImmersiveMode.Gamepad -> GamepadImeContent(keyState)
+                ImmersiveMode.Default -> Unit
+            }
         }
     }
 }
 
 @Composable
-private fun KeyboardImeContent(keyState: KeyboardKeyState) {
-    ImmersiaTheme {
-        KeyboardImeContent(
-            pressedKeys = keyState.pressedKeys,
-            onKeyPress = { keyState.press(it) },
-            onKeyRelease = { keyState.release(it) },
-        )
-    }
-}
-
-@Composable
 private fun KeyboardImeContent(
-    pressedKeys: SnapshotStateSet<Int>,
-    onKeyPress: (Int) -> Unit,
-    onKeyRelease: (Int) -> Unit,
+    keyState: KeyboardKeyState,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -95,9 +87,7 @@ private fun KeyboardImeContent(
                     keyWidth = keyWidth,
                     keyGap = keyGap,
                     horizontalAlignment = Alignment.Start,
-                    pressedKeys = pressedKeys,
-                    onKeyPress = onKeyPress,
-                    onKeyRelease = onKeyRelease,
+                    keyState = keyState,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(
@@ -110,9 +100,7 @@ private fun KeyboardImeContent(
                     keyWidth = keyWidth,
                     keyGap = keyGap,
                     horizontalAlignment = Alignment.End,
-                    pressedKeys = pressedKeys,
-                    onKeyPress = onKeyPress,
-                    onKeyRelease = onKeyRelease,
+                    keyState = keyState,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -126,9 +114,7 @@ private fun KeyboardImeHalf(
     keyWidth: Dp,
     keyGap: Dp,
     horizontalAlignment: Alignment.Horizontal,
-    pressedKeys: SnapshotStateSet<Int>,
-    onKeyPress: (Int) -> Unit,
-    onKeyRelease: (Int) -> Unit,
+    keyState: KeyboardKeyState,
     modifier: Modifier,
 ) {
     Column(
@@ -142,9 +128,9 @@ private fun KeyboardImeHalf(
                     ImeKey(
                         label = key.label,
                         keyCode = key.keyCode,
-                        active = key.keyCode in pressedKeys,
-                        onPress = { onKeyPress(key.keyCode) },
-                        onRelease = { onKeyRelease(key.keyCode) },
+                        active = key.keyCode in keyState.pressedKeys,
+                        onPress = { keyState.press(key.keyCode) },
+                        onRelease = { keyState.release(key.keyCode) },
                         modifier = Modifier
                             .width(keyWidth)
                             .height(32.dp)
@@ -199,15 +185,236 @@ private fun ImeKey(
     }
 }
 
-@Preview(widthDp = 800, heightDp = 400, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun GamepadImeContent(keyState: KeyboardKeyState) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 48.dp, vertical = 8.dp),
+        ) {
+            val keyGap = 12.dp
+            val buttonSize = (maxHeight * 0.25f).coerceIn(42.dp, 88.dp)
+            val bottomPadding = 48.dp
+            val availableHeight = (maxHeight - bottomPadding).coerceAtLeast(0.dp)
+            val shoulderHeight = (availableHeight * 0.16f).coerceIn(24.dp, 34.dp)
+            val buttonHeight = (
+                    (availableHeight - keyGap * 4) / 3
+                    ).coerceIn(20.dp, 56.dp)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 64.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                GamepadDpad(
+                    keyState = keyState,
+                    buttonSize = buttonSize,
+                    buttonHeight = buttonHeight,
+                    gap = keyGap,
+                    modifier = Modifier,
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        GamepadImeButton(
+                            key = GamepadKey.SELECT,
+                            keyState = keyState,
+                            modifier = Modifier
+                                .width(buttonSize * 1.6f)
+                                .height(shoulderHeight),
+                        )
+                        GamepadImeButton(
+                            key = GamepadKey.START,
+                            keyState = keyState,
+                            modifier = Modifier
+                                .width(buttonSize * 1.6f)
+                                .height(shoulderHeight),
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(48.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        GamepadImeButton(
+                            key = GamepadKey.L1,
+                            keyState = keyState,
+                            modifier = Modifier
+                                .width(buttonSize * 1.5f)
+                                .height(shoulderHeight),
+                        )
+                        GamepadImeButton(
+                            key = GamepadKey.R1,
+                            keyState = keyState,
+                            modifier = Modifier
+                                .width(buttonSize * 1.5f)
+                                .height(shoulderHeight),
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(keyGap))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        GamepadImeButton(
+                            key = GamepadKey.L2,
+                            keyState = keyState,
+                            modifier = Modifier
+                                .width(buttonSize * 1.5f)
+                                .height(shoulderHeight),
+                        )
+                        GamepadImeButton(
+                            key = GamepadKey.R2,
+                            keyState = keyState,
+                            modifier = Modifier
+                                .width(buttonSize * 1.5f)
+                                .height(shoulderHeight),
+                        )
+                    }
+                }
+
+                GamepadFaceButtons(
+                    keyState = keyState,
+                    buttonSize = buttonSize,
+                    buttonHeight = buttonHeight,
+                    gap = keyGap,
+                    modifier = Modifier,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GamepadDpad(
+    keyState: KeyboardKeyState,
+    buttonSize: Dp,
+    buttonHeight: Dp,
+    gap: Dp,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(gap),
+    ) {
+        GamepadImeButton(
+            GamepadKey.DPAD_UP,
+            keyState,
+            Modifier
+                .width(buttonSize)
+                .height(buttonHeight),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(gap * 2)) {
+            GamepadImeButton(
+                GamepadKey.DPAD_LEFT,
+                keyState,
+                Modifier
+                    .width(buttonSize)
+                    .height(buttonHeight),
+            )
+            GamepadImeButton(
+                GamepadKey.DPAD_RIGHT,
+                keyState,
+                Modifier
+                    .width(buttonSize)
+                    .height(buttonHeight),
+            )
+        }
+        GamepadImeButton(
+            GamepadKey.DPAD_DOWN,
+            keyState,
+            Modifier
+                .width(buttonSize)
+                .height(buttonHeight),
+        )
+    }
+}
+
+@Composable
+private fun GamepadFaceButtons(
+    keyState: KeyboardKeyState,
+    buttonSize: Dp,
+    buttonHeight: Dp,
+    gap: Dp,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(gap),
+    ) {
+        GamepadImeButton(
+            GamepadKey.Y,
+            keyState,
+            Modifier
+                .width(buttonSize)
+                .height(buttonHeight),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(gap * 2)) {
+            GamepadImeButton(
+                GamepadKey.X,
+                keyState,
+                Modifier
+                    .width(buttonSize)
+                    .height(buttonHeight),
+            )
+            GamepadImeButton(
+                GamepadKey.B,
+                keyState,
+                Modifier
+                    .width(buttonSize)
+                    .height(buttonHeight),
+            )
+        }
+        GamepadImeButton(
+            GamepadKey.A,
+            keyState,
+            Modifier
+                .width(buttonSize)
+                .height(buttonHeight),
+        )
+    }
+}
+
+@Composable
+private fun GamepadImeButton(
+    key: GamepadKey,
+    keyState: KeyboardKeyState,
+    modifier: Modifier,
+) {
+    ImeKey(
+        label = key.label,
+        keyCode = key.keyCode,
+        active = key.keyCode in keyState.pressedKeys,
+        onPress = { keyState.press(key.keyCode) },
+        onRelease = { keyState.release(key.keyCode) },
+        modifier = modifier,
+    )
+}
+
+@Preview(widthDp = 800, heightDp = 250, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun KeyboardImeContentPreview() {
     ImmersiaTheme {
         val set = remember { mutableStateSetOf<Int>() }
         KeyboardImeContent(
-            pressedKeys = set,
-            onKeyPress = { set.add(it) },
-            onKeyRelease = { set.remove(it) },
+            keyState = KeyboardKeyState { set.add(it.keyCode) },
+        )
+    }
+}
+
+@Preview(widthDp = 800, heightDp = 250, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun GamepadImeContentPreview() {
+    ImmersiaTheme {
+        val set = remember { mutableStateSetOf<Int>() }
+        GamepadImeContent(
+            keyState = KeyboardKeyState { set.add(it.keyCode) },
         )
     }
 }

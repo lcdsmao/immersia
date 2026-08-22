@@ -9,6 +9,8 @@ interface ImmersiaAccessibilityInteractor {
 
     fun enterKeyboardMode(): KeyboardImeResult
 
+    fun enterGamepadMode(): KeyboardImeResult
+
     fun exitKeyboardMode()
 
     data class KeyboardImeResult(

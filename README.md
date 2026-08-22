@@ -22,14 +22,16 @@ Immersia will:
 - Convert left/right split-screen to top/bottom when needed.
 - Place Immersia over the camera side.
 - Resize the Immersia pane to approximately 32% of the display.
-- Enable and switch to its local keyboard input method.
-- Place the keyboard input-method window over Immersia's split pane.
+- Enable and switch to its local input method.
+- Place the input-method window over Immersia's split pane.
 
-The keyboard is a real Android `InputMethodService` with a Compose UI. The
-adjacent app remains the input target and controls whether the IME is shown;
-Immersia only supplies the IME window's size and position. Keys are delivered
-to the target through `InputConnection.sendKeyEvent` with explicit down/up
-events, including held-state and cancellation handling.
+The keyboard and gamepad are modes of a real Android `InputMethodService` with
+a Compose UI. Double-tap the lower-right corner to cycle between the default,
+keyboard, and gamepad modes. The adjacent app remains the input target and
+controls whether the IME is shown; Immersia only supplies the IME window's size
+and position. Controls are delivered to the target through
+`InputConnection.sendKeyEvent` with explicit down/up events, including
+held-state and cancellation handling.
 
 The adjacent app controls when the IME is shown or hidden. Use **Exit Immersia** to leave the helper app.
 
@@ -45,6 +47,6 @@ Install the generated APK from `app/build/outputs/apk/debug/`.
 
 Immersia relies on Samsung accessibility UI controls because normal third-party apps cannot directly control another app's split-screen stage or divider ratio. Accessibility labels and Samsung window behavior may change between One UI versions.
 
-The keyboard sends `KeyEvent`s through the focused adjacent app. It does not
-create an Android gamepad `InputDevice`, does not provide analog axes, and
-cannot control an app that does not accept IME input events.
+The keyboard and gamepad send `KeyEvent`s through the focused adjacent app.
+Gamepad mode does not create an Android gamepad `InputDevice` or provide analog
+axes, and compatibility depends on the target accepting IME input events.
