@@ -166,7 +166,7 @@ class ImmersiaViewModel(
         private const val LANDSCAPE_MESSAGE =
             "Rotate the device to landscape before starting Immersia."
         private const val SPLIT_MESSAGE =
-            "Create a split screen with your video app and Immersia first."
+            "Create a split screen with another app and Immersia first."
         private val IMMERSIVE_CHECK_DELAY = 1.seconds
         private val ENVIRONMENT_UI_UPDATE_DELAY = 500.milliseconds
     }
