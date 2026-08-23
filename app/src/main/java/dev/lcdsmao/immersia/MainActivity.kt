@@ -1,7 +1,6 @@
 package dev.lcdsmao.immersia
 
 import android.content.Intent
-import android.content.res.Configuration
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Surface
@@ -12,10 +11,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ExperimentalMediaQueryApi
 import androidx.compose.ui.UiMediaScope
+import androidx.compose.ui.derivedMediaQuery
 import androidx.compose.ui.mediaQuery
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.initializer
@@ -42,19 +45,27 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val isFlatPosture = mediaQuery {
-                windowPosture == UiMediaScope.Posture.Flat
-            }
-            LaunchedEffect(isFlatPosture) {
-                viewModel.onUiEvent(ImmersiaUiEvent.OnPostureChange(isFlatPosture))
-            }
-
             LifecycleResumeEffect(Unit) {
                 viewModel.onUiEvent(ImmersiaUiEvent.OnResume)
-                dispatchConfigurationChanged()
                 onPauseOrDispose {
                     viewModel.onUiEvent(ImmersiaUiEvent.OnPause)
                 }
+            }
+
+            val isFlatPosture = mediaQuery { windowPosture == UiMediaScope.Posture.Flat }
+            val isLargeWidth by derivedMediaQuery { windowWidth >= 600.dp }
+            val isLargeHeight by derivedMediaQuery { windowHeight >= 480.dp }
+            val configuration = LocalConfiguration.current
+            LaunchedEffect(isFlatPosture, isLargeWidth, isLargeHeight, configuration) {
+                viewModel.onUiEvent(
+                    ImmersiaUiEvent.OnConfigurationChanged(
+                        isLandscape = display?.rotation == Surface.ROTATION_90 || display?.rotation == Surface.ROTATION_270,
+                        isInMultiWindowMode = isInMultiWindowMode,
+                        isFlatPosture = isFlatPosture,
+                        isLargeWidth = isLargeWidth,
+                        isLargeHeight = isLargeHeight,
+                    )
+                )
             }
 
             LifecycleStartEffect(Unit) {
@@ -77,19 +88,5 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        dispatchConfigurationChanged()
-    }
-
-    private fun dispatchConfigurationChanged() {
-        viewModel.onUiEvent(
-            ImmersiaUiEvent.OnConfigurationChanged(
-                isLandscape = display?.rotation == Surface.ROTATION_90 || display?.rotation == Surface.ROTATION_270,
-                isInMultiWindowMode = isInMultiWindowMode,
-            )
-        )
     }
 }

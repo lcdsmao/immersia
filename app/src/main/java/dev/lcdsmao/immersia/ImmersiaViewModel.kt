@@ -33,14 +33,8 @@ class ImmersiaViewModel(
 
     fun onUiEvent(event: ImmersiaUiEvent) {
         when (event) {
-            is ImmersiaUiEvent.OnPostureChange -> viewModelScope.launch {
-                updateEnvironment(fullyUnfolded = event.isFlatPosture)
-            }
             is ImmersiaUiEvent.OnConfigurationChanged -> viewModelScope.launch {
-                updateEnvironment(
-                    landscapeReady = event.isLandscape,
-                    inSplitMode = event.isInMultiWindowMode
-                )
+                updateEnvironment(configurationChanged = event)
             }
             is ImmersiaUiEvent.OnImmersiveModeChange -> changeImmersiveMode(event.mode)
             ImmersiaUiEvent.OnResume -> onResume()
@@ -101,17 +95,21 @@ class ImmersiaViewModel(
 
     private suspend fun updateEnvironment(
         settingsChanged: ImmersiaAccessibilityInteractor.Event.SettingsChanged? = null,
-        fullyUnfolded: Boolean? = null,
-        landscapeReady: Boolean? = null,
-        inSplitMode: Boolean? = null,
+        configurationChanged: ImmersiaUiEvent.OnConfigurationChanged? = null,
     ) {
         environment = Environment(
             accessibilityEnabled = settingsChanged?.accessibilityEnabled
                 ?: environment.accessibilityEnabled,
             serviceReady = settingsChanged?.serviceReady ?: environment.serviceReady,
-            fullyUnfolded = fullyUnfolded ?: environment.fullyUnfolded,
-            landscapeReady = landscapeReady ?: environment.landscapeReady,
-            inSplitMode = inSplitMode ?: environment.inSplitMode,
+            fullyUnfolded = configurationChanged?.let {
+                it.isFlatPosture && if (it.isInMultiWindowMode) {
+                    it.isLargeWidth || it.isLargeHeight
+                } else {
+                    it.isLargeWidth && it.isLargeHeight
+                }
+            } ?: environment.fullyUnfolded,
+            landscapeReady = configurationChanged?.isLandscape ?: environment.landscapeReady,
+            inSplitMode = configurationChanged?.isInMultiWindowMode ?: environment.inSplitMode,
         )
         val isCurrentUiStateImmersive = uiState is ImmersiaUiState.Immersive
         if (isCurrentUiStateImmersive) {
