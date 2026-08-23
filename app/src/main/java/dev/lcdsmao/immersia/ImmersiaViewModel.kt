@@ -148,10 +148,10 @@ class ImmersiaViewModel(
     }
 
     private fun environmentMessage() = when {
-        !environment.fullyUnfolded -> UNFOLDED_MESSAGE
         !environment.serviceReady -> SERVICE_MESSAGE
-        !environment.landscapeReady -> LANDSCAPE_MESSAGE
+        !environment.fullyUnfolded -> UNFOLDED_MESSAGE
         !environment.inSplitMode -> SPLIT_MESSAGE
+        !environment.landscapeReady -> LANDSCAPE_MESSAGE
         else -> "Preparing..."
     }
 
