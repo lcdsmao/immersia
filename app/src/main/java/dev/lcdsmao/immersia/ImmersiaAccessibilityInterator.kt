@@ -1,10 +1,15 @@
 package dev.lcdsmao.immersia
 
+import android.view.Display
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 interface ImmersiaAccessibilityInteractor {
     val eventFlow: Flow<Event>
+
+    val activeDisplay: ActiveDisplay?
+
+    fun emitEvent(event: Event)
 
     fun beginImmersive()
 
@@ -21,14 +26,14 @@ interface ImmersiaAccessibilityInteractor {
         ) : Event
     }
 
-    fun interface EventEmitter {
-        fun emit(event: Event)
-    }
+    class ActiveDisplay(val rotation: () -> Int)
 
     interface Holder {
         val interactor: ImmersiaAccessibilityInteractor
 
-        fun bindService(accessibilityService: ImmersiaAccessibilityService?): EventEmitter
+        fun bindService(accessibilityService: ImmersiaAccessibilityService?)
+
+        fun bindDisplay(display: Display?)
     }
 }
 
@@ -40,8 +45,20 @@ class ImmersiaAccessibilityInteractorImpl : ImmersiaAccessibilityInteractor {
         extraBufferCapacity = 20,
     )
 
-    fun bind(accessibilityService: ImmersiaAccessibilityService?) {
+    override var activeDisplay: ImmersiaAccessibilityInteractor.ActiveDisplay? = null
+
+    override fun emitEvent(event: ImmersiaAccessibilityInteractor.Event) {
+        eventFlow.tryEmit(event)
+    }
+
+    fun bindService(accessibilityService: ImmersiaAccessibilityService?) {
         service = accessibilityService
+    }
+
+    fun bindDisplay(display: Display?) {
+        activeDisplay = display?.let {
+            ImmersiaAccessibilityInteractor.ActiveDisplay { display.rotation }
+        }
     }
 
     override fun beginImmersive() {

@@ -8,7 +8,6 @@ import android.graphics.Path
 import android.graphics.Point
 import android.graphics.Rect
 import android.provider.Settings
-import android.view.Display
 import android.view.Surface
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -32,18 +31,11 @@ import kotlin.time.Duration.Companion.milliseconds
 class ImmersiaAccessibilityService : AccessibilityService(),
     CoroutineScope by MainScope() {
 
-    fun interface DisplayProvider {
-        fun display(): Display
-    }
-
     private data class Pane(val packageName: String, val bounds: Rect)
 
     private class InteractionException(message: String) : Exception(message)
 
     companion object {
-        @Volatile
-        var displayProvider: DisplayProvider? = null
-
         const val VIDEO_RATIO = 0.68f
         const val CAMERA_NATURAL_X = 0.7562f
         const val CAMERA_NATURAL_Y = 0.0252f
@@ -67,12 +59,13 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     private val operationRunning get() = operationJob?.isActive == true
 
-    private var eventEmitter: ImmersiaAccessibilityInteractor.EventEmitter? = null
+    private var interactor: ImmersiaAccessibilityInteractor? = null
 
     override fun onServiceConnected() {
         val holder = applicationContext as? ImmersiaAccessibilityInteractor.Holder
-        eventEmitter = holder?.bindService(this)
-        eventEmitter?.emit(
+        holder?.bindService(this)
+        interactor = holder?.interactor
+        interactor?.emitEvent(
             ImmersiaAccessibilityInteractor.Event.SettingsChanged(
                 accessibilityEnabled = isAccessibilityEnabled(),
                 serviceReady = false,
@@ -82,13 +75,13 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onDestroy() {
         exitImeMode()
-        eventEmitter?.emit(
+        interactor?.emitEvent(
             ImmersiaAccessibilityInteractor.Event.SettingsChanged(
                 accessibilityEnabled = isAccessibilityEnabled(),
                 serviceReady = false,
             )
         )
-        eventEmitter = null
+        interactor = null
         coroutineContext.cancel()
         val holder = applicationContext as? ImmersiaAccessibilityInteractor.Holder
         holder?.bindService(null)
@@ -97,7 +90,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (operationRunning) return
-        if (displayProvider == null) return
+        if (interactor?.activeDisplay == null) return
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
             event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {
@@ -113,7 +106,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             try {
                 ensureTopBottomSplit()
             } catch (e: InteractionException) {
-                eventEmitter?.emit(
+                interactor?.emitEvent(
                     ImmersiaAccessibilityInteractor.Event.ImmersiveFailed(
                         e.message ?: "Immersia failed to operate Samsung's split-screen controls."
                     )
@@ -181,7 +174,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         environmentUpdateJob = launch {
             delay(ENVIRONMENT_CHANGE_DELAY.milliseconds)
             if (!operationRunning) {
-                eventEmitter?.emit(
+                interactor?.emitEvent(
                     ImmersiaAccessibilityInteractor.Event.SettingsChanged(
                         accessibilityEnabled = isAccessibilityEnabled(),
                         serviceReady = true,
@@ -280,7 +273,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
 
         if (abs(divider.y - targetY) < BOUNDARY_TOLERANCE) {
             immersiveBounds = Rect(ours.bounds)
-            eventEmitter?.emit(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
+            interactor?.emitEvent(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
             return
         }
 
@@ -298,7 +291,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
             finalRatio != null && abs(finalRatio - (1f - VIDEO_RATIO)) < RATIO_TOLERANCE
         ) {
             immersiveBounds = Rect(finalOurs.bounds)
-            eventEmitter?.emit(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
+            interactor?.emitEvent(ImmersiaAccessibilityInteractor.Event.ImmersiveSucceeded)
         } else {
             throw InteractionException("The split divider did not reach the requested immersive ratio.")
         }
@@ -499,7 +492,7 @@ class ImmersiaAccessibilityService : AccessibilityService(),
         // the calibrated natural top-right position into the current display rotation.
         return transformNaturalCameraPoint(
             display,
-            displayProvider?.display()?.rotation ?: Surface.ROTATION_0
+            interactor?.activeDisplay?.rotation() ?: Surface.ROTATION_0,
         )
     }
 

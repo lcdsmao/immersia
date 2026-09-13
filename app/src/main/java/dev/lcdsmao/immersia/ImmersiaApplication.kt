@@ -1,6 +1,7 @@
 package dev.lcdsmao.immersia
 
 import android.app.Application
+import android.view.Display
 import androidx.compose.ui.ComposeUiFlags
 import androidx.compose.ui.ExperimentalComposeUiApi
 
@@ -16,10 +17,7 @@ class ImmersiaApplication : Application(),
 
     override fun bindService(
         accessibilityService: ImmersiaAccessibilityService?,
-    ): ImmersiaAccessibilityInteractor.EventEmitter {
-        interactor.bind(accessibilityService)
-        return ImmersiaAccessibilityInteractor.EventEmitter { event ->
-            interactor.eventFlow.tryEmit(event)
-        }
-    }
+    ) = interactor.bindService(accessibilityService)
+
+    override fun bindDisplay(display: Display?) = interactor.bindDisplay(display)
 }

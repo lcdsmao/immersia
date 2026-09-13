@@ -26,9 +26,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val accessibilityInteractorHolder
+        get() = applicationContext as ImmersiaAccessibilityInteractor.Holder
+
     private val viewModel by viewModels<ImmersiaViewModel> {
         viewModelFactory {
-            initializer { ImmersiaViewModel(immersiveInteractor = (applicationContext as ImmersiaAccessibilityInteractor.Holder).interactor) }
+            initializer { ImmersiaViewModel(immersiveInteractor = accessibilityInteractorHolder.interactor) }
         }
     }
 
@@ -69,12 +73,9 @@ class MainActivity : ComponentActivity() {
             }
 
             LifecycleStartEffect(Unit) {
-                val displayProvider = ImmersiaAccessibilityService.DisplayProvider { display }
-                ImmersiaAccessibilityService.displayProvider = displayProvider
+                accessibilityInteractorHolder.bindDisplay(display)
                 onStopOrDispose {
-                    if (ImmersiaAccessibilityService.displayProvider == displayProvider) {
-                        ImmersiaAccessibilityService.displayProvider = null
-                    }
+                    accessibilityInteractorHolder.bindDisplay(null)
                 }
             }
 
