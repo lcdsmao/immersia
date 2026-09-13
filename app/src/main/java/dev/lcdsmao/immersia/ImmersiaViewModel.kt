@@ -14,7 +14,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class ImmersiaViewModel(
-    private val immersiveInteractor: () -> ImmersiaAccessibilityInteractor?,
+    private val immersiveInteractor: ImmersiaAccessibilityInteractor,
 ) : ViewModel() {
     private data class Environment(
         val accessibilityEnabled: Boolean = false,
@@ -43,10 +43,8 @@ class ImmersiaViewModel(
     }
 
     private fun onResume() {
-        val interactor = immersiveInteractor() ?: return
-        startImmersiveJob()
         accessibilityEventJob = viewModelScope.launch {
-            interactor.eventFlow.collectLatest { event ->
+            immersiveInteractor.eventFlow.collectLatest { event ->
                 when (event) {
                     is ImmersiaAccessibilityInteractor.Event.SettingsChanged -> updateEnvironment(
                         settingsChanged = event,
@@ -61,7 +59,7 @@ class ImmersiaViewModel(
     }
 
     private fun onPause() {
-        immersiveInteractor()?.exitKeyboardMode()
+        immersiveInteractor.setImeMode(ImmersiveMode.Default)
         accessibilityEventJob?.cancel()
         accessibilityEventJob = null
         immersiveJob?.cancel()
@@ -69,7 +67,6 @@ class ImmersiaViewModel(
     }
 
     private fun startImmersiveJob() {
-        val interactor = immersiveInteractor() ?: return
         immersiveJob?.cancel()
         immersiveJob = viewModelScope.launch {
             while (isActive) {
@@ -79,18 +76,14 @@ class ImmersiaViewModel(
                     (this as? ImmersiaUiState.Preparation)?.copy(message = "Adjusting the split screen...")
                         ?: this
                 }
-                interactor.beginImmersive()
+                immersiveInteractor.beginImmersive()
             }
         }
     }
 
     private fun changeImmersiveMode(mode: ImmersiveMode) {
         updateUiState { (this as? ImmersiaUiState.Immersive)?.copy(mode = mode) ?: this }
-        when (mode) {
-            ImmersiveMode.Keyboard -> immersiveInteractor()?.enterKeyboardMode()
-            ImmersiveMode.Gamepad -> immersiveInteractor()?.enterGamepadMode()
-            ImmersiveMode.Default -> immersiveInteractor()?.exitKeyboardMode()
-        }
+        immersiveInteractor.setImeMode(mode)
     }
 
     private suspend fun updateEnvironment(
@@ -121,7 +114,7 @@ class ImmersiaViewModel(
             }
             !isEnvironmentReady() -> {
                 if (isCurrentUiStateImmersive) {
-                    immersiveInteractor()?.exitKeyboardMode()
+                    immersiveInteractor.setImeMode(ImmersiveMode.Default)
                 }
                 updateUiState { ImmersiaUiState.Preparation(environmentMessage()) }
             }

@@ -28,7 +28,7 @@ import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<ImmersiaViewModel> {
         viewModelFactory {
-            initializer { ImmersiaViewModel(immersiveInteractor = { ImmersiaAccessibilityService.instance }) }
+            initializer { ImmersiaViewModel(immersiveInteractor = (applicationContext as ImmersiaAccessibilityInteractor.Holder).interactor) }
         }
     }
 
