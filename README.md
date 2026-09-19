@@ -8,6 +8,7 @@ Immersia is a helper app for Samsung Galaxy Z Fold devices. It uses a black spli
 - Expanded inner display, fully unfolded
 - A video app and Immersia already placed in split-screen mode
 - Immersia accessibility service enabled
+- Shizuku running and Immersia authorized in Shizuku
 
 ## Usage
 
@@ -15,6 +16,9 @@ Immersia is a helper app for Samsung Galaxy Z Fold devices. It uses a black spli
 2. Enable **Immersia** in **Settings > Accessibility**.
 3. Start a video app and Immersia in split-screen mode.
 4. Keep Immersia visible in the split pair. It automatically enters immersive mode when the display is flat, landscape, and the split environment is ready.
+
+While Immersia is started, it enables Samsung's **Full screen in split screen view**
+mode through Shizuku. The previous value is restored when Immersia stops.
 
 Immersia will:
 

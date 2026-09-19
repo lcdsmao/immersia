@@ -1,5 +1,6 @@
 package dev.lcdsmao.immersia
 
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -26,6 +27,12 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val splitImmersiveController by lazy {
+        SamsungSplitImmersiveController(
+            ComponentName(this, SamsungMultiWindowUserService::class.java),
+        )
+    }
 
     private val accessibilityInteractorHolder
         get() = applicationContext as ImmersiaAccessibilityInteractor.Holder
@@ -73,8 +80,10 @@ class MainActivity : ComponentActivity() {
             }
 
             LifecycleStartEffect(Unit) {
+                splitImmersiveController.onStart()
                 accessibilityInteractorHolder.bindDisplay(display)
                 onStopOrDispose {
+                    splitImmersiveController.onStop()
                     accessibilityInteractorHolder.bindDisplay(null)
                 }
             }
