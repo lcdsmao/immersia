@@ -1,5 +1,7 @@
 # Immersia
 
+> ⚠️ **Toy project — not production software.** This is an experimental hobby project built for personal use. It comes with no warranty, no stability guarantees, and no official support. Use at your own risk; behavior may break with One UI / Android updates.
+
 Immersia is a helper app for Samsung Galaxy Z Fold devices. It uses a black split-screen companion pane to keep fullscreen video away from the inner display camera hole.
 
 ## Requirements
@@ -54,3 +56,7 @@ Immersia relies on Samsung accessibility UI controls because normal third-party 
 The keyboard and gamepad send `KeyEvent`s through the focused adjacent app.
 Gamepad mode does not create an Android gamepad `InputDevice` or provide analog
 axes, and compatibility depends on the target accepting IME input events.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
