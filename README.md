@@ -4,6 +4,10 @@
 
 Immersia is a helper app for Samsung Galaxy Z Fold devices. It uses a black split-screen companion pane to keep fullscreen video away from the inner display camera hole.
 
+## Demo
+
+https://github.com/user-attachments/assets/fe1129ec-dc34-47aa-b28e-6c0760916283
+
 ## Requirements
 
 - Samsung Galaxy Z Fold device with a compatible One UI version
