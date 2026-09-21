@@ -28,9 +28,9 @@ import dev.lcdsmao.immersia.ui.theme.ImmersiaTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val splitImmersiveController by lazy {
-        SamsungSplitImmersiveController(
-            ComponentName(this, SamsungMultiWindowUserService::class.java),
+    private val shizukuController by lazy {
+        ImmersiaShizukuController(
+            ComponentName(this, ImmersiaShizukuService::class.java),
         )
     }
 
@@ -80,10 +80,10 @@ class MainActivity : ComponentActivity() {
             }
 
             LifecycleStartEffect(Unit) {
-                splitImmersiveController.onStart()
+                shizukuController.onStart()
                 accessibilityInteractorHolder.bindDisplay(display)
                 onStopOrDispose {
-                    splitImmersiveController.onStop()
+                    shizukuController.onStop()
                     accessibilityInteractorHolder.bindDisplay(null)
                 }
             }

@@ -13,18 +13,19 @@ https://github.com/user-attachments/assets/fe1129ec-dc34-47aa-b28e-6c0760916283
 - Samsung Galaxy Z Fold device with a compatible One UI version
 - Expanded inner display, fully unfolded
 - A video app and Immersia already placed in split-screen mode
-- Immersia accessibility service enabled
-- Shizuku running and Immersia authorized in Shizuku
+- Immersia accessibility service enabled manually, or Shizuku running with Immersia authorized
 
 ## Usage
 
 1. Open the inner display completely.
-2. Enable **Immersia** in **Settings > Accessibility**.
+2. Either enable **Immersia** in **Settings > Accessibility**, or start Shizuku and authorize Immersia so it can enable the service automatically.
 3. Start a video app and Immersia in split-screen mode.
 4. Keep Immersia visible in the split pair. It automatically enters immersive mode when the display is flat, landscape, and the split environment is ready.
 
-While Immersia is started, it enables Samsung's **Full screen in split screen view**
-mode through Shizuku. The previous value is restored when Immersia stops.
+When Shizuku is available and authorized, Immersia enables Samsung's **Full
+screen in split screen view** mode and its accessibility service while it is
+running. The previous values are restored when Immersia stops. Without
+Shizuku, the manually enabled accessibility service continues to work normally.
 
 Immersia will:
 
